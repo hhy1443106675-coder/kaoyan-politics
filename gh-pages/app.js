@@ -1465,15 +1465,70 @@
   }
 
   // =========================================================================
+  // 私人密码锁验证 (PIN: 7178，采用简单哈希校验防止明文直看)
+  // =========================================================================
+  const AUTH_TOKEN_KEY = "kaoyan_politics_auth_v1";
+  function checkPinHash(str) {
+    let h = 2166136261;
+    const s = "ky27_" + String(str || "").trim();
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0) === 3893239676;
+  }
+
+  function initAuthGate(onUnlocked) {
+    const overlay = document.getElementById("authLockOverlay");
+    const appLayout = document.getElementById("appLayout");
+    if (!overlay || !appLayout) {
+      onUnlocked();
+      return;
+    }
+    // 本地 file:// 直接打开免密，或者已验证过免密
+    if (location.protocol === "file:" || localStorage.getItem(AUTH_TOKEN_KEY) === "unlocked_3893239676") {
+      overlay.style.display = "none";
+      appLayout.style.display = "flex";
+      onUnlocked();
+      return;
+    }
+
+    const input = document.getElementById("authPinInput");
+    const btn = document.getElementById("btnAuthUnlock");
+    const err = document.getElementById("authErrorMsg");
+
+    function tryUnlock() {
+      if (checkPinHash(input.value)) {
+        localStorage.setItem(AUTH_TOKEN_KEY, "unlocked_3893239676");
+        overlay.style.display = "none";
+        appLayout.style.display = "flex";
+        onUnlocked();
+      } else {
+        err.textContent = "通行口令不正确，请重新输入";
+        input.value = "";
+        input.focus();
+      }
+    }
+
+    btn.addEventListener("click", tryUnlock);
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") tryUnlock();
+    });
+    setTimeout(() => input.focus(), 100);
+  }
+
+  // =========================================================================
   // 初始化启动
   // =========================================================================
   function init() {
     initTheme();
-    loadStore();
-    updateGlobalStatsUI();
-    populateChapterDropdown();
-    bindGlobalEvents();
-    renderDashboard();
+    initAuthGate(() => {
+      loadStore();
+      updateGlobalStatsUI();
+      populateChapterDropdown();
+      bindGlobalEvents();
+      renderDashboard();
+    });
   }
 
   if (document.readyState === "loading") {

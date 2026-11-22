@@ -7,7 +7,26 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app-layout" id="appLayout">
+  <!-- 专属访问密码锁屏层 (默认锁定，验证通过后永久记住) -->
+  <div class="auth-lock-overlay" id="authLockOverlay">
+    <div class="auth-lock-card">
+      <div class="auth-lock-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </div>
+      <h2>私人备考空间 · 访问受限</h2>
+      <p>请输入 4 位专属通行口令解锁题库（本机验证一次后自动记住）</p>
+      <div class="auth-pin-row">
+        <input type="password" id="authPinInput" maxlength="8" inputmode="numeric" placeholder="请输入通行密码..." autocomplete="off" />
+        <button type="button" id="btnAuthUnlock">解锁进入</button>
+      </div>
+      <div class="auth-error-msg" id="authErrorMsg"></div>
+    </div>
+  </div>
+
+  <div class="app-layout" id="appLayout" style="display:none">
     <!-- 左侧高颜值导航栏 -->
     <aside class="sidebar" id="sidebar">
       <div class="brand-header">
