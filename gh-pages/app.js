@@ -1522,13 +1522,11 @@
   // =========================================================================
   function init() {
     initTheme();
-    initAuthGate(() => {
-      loadStore();
-      updateGlobalStatsUI();
-      populateChapterDropdown();
-      bindGlobalEvents();
-      renderDashboard();
-    });
+    loadStore();
+    updateGlobalStatsUI();
+    populateChapterDropdown();
+    bindGlobalEvents();
+    renderDashboard();
   }
 
   if (document.readyState === "loading") {

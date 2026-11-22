@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>研政智库 · 考研政治全真题库与高分刷题系统</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=202702" />
 </head>
 <body>
-  <!-- 专属访问密码锁屏层 (默认锁定，验证通过后永久记住) -->
+  <!-- 专属访问密码锁屏层 (默认锁定，验证通过后永久记住，内联逻辑防缓存失效) -->
   <div class="auth-lock-overlay" id="authLockOverlay">
     <div class="auth-lock-card">
       <div class="auth-lock-icon">
@@ -19,12 +19,49 @@
       <h2>私人备考空间 · 访问受限</h2>
       <p>请输入 4 位专属通行口令解锁题库（本机验证一次后自动记住）</p>
       <div class="auth-pin-row">
-        <input type="password" id="authPinInput" maxlength="8" inputmode="numeric" placeholder="请输入通行密码..." autocomplete="off" />
-        <button type="button" id="btnAuthUnlock">解锁进入</button>
+        <input type="password" id="authPinInput" maxlength="8" inputmode="numeric" placeholder="请输入通行密码..." autocomplete="off" onkeydown="if(event.key==='Enter')window.__unlockKaoyanHub&&window.__unlockKaoyanHub()" />
+        <button type="button" id="btnAuthUnlock" onclick="window.__unlockKaoyanHub&&window.__unlockKaoyanHub()">解锁进入</button>
       </div>
       <div class="auth-error-msg" id="authErrorMsg"></div>
     </div>
   </div>
+  <script>
+    (function(){
+      var KEY = "kaoyan_politics_auth_v1";
+      function checkPin(val) {
+        var s = "ky27_" + String(val || "").trim();
+        var h = 2166136261;
+        for (var i = 0; i < s.length; i++) {
+          h ^= s.charCodeAt(i);
+          h = Math.imul(h, 16777619);
+        }
+        return (h >>> 0) === 3893239676;
+      }
+      function unlockNow() {
+        var ov = document.getElementById("authLockOverlay");
+        var ap = document.getElementById("appLayout");
+        if (ov) ov.style.display = "none";
+        if (ap) ap.style.display = "flex";
+      }
+      window.__unlockKaoyanHub = function() {
+        var inp = document.getElementById("authPinInput");
+        var err = document.getElementById("authErrorMsg");
+        if (inp && checkPin(inp.value)) {
+          try { localStorage.setItem(KEY, "unlocked_3893239676"); } catch(e) {}
+          unlockNow();
+        } else {
+          if (err) err.textContent = "通行口令不正确，请重新输入";
+          if (inp) { inp.value = ""; inp.focus(); }
+        }
+      };
+      try {
+        if (location.protocol === "file:" || localStorage.getItem(KEY) === "unlocked_3893239676") {
+          document.addEventListener("DOMContentLoaded", unlockNow);
+          setTimeout(unlockNow, 0);
+        }
+      } catch(e) {}
+    })();
+  </script>
 
   <div class="app-layout" id="appLayout" style="display:none">
     <!-- 左侧高颜值导航栏 -->
@@ -415,7 +452,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- 离线题库数据包与主逻辑 -->
-  <script src="data/question_bank_bundle.js"></script>
-  <script src="app.js"></script>
+  <script src="data/question_bank_bundle.js?v=202702"></script>
+  <script src="app.js?v=202702"></script>
 </body>
 </html>
