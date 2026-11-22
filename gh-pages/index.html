@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>研政智库 · 考研政治全真题库与高分刷题系统</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-layout" id="appLayout">
+    <!-- 左侧高颜值导航栏 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand-header">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
+            <path d="M9 10h6"/>
+            <path d="M12 7v6"/>
+          </svg>
+        </div>
+        <div class="brand-title">
+          <h1>研政智库 <span>2027</span></h1>
+          <p>真题 · 肖秀荣1000题 · 密训库</p>
+        </div>
+      </div>
+
+      <!-- 总体掌握率迷你卡片 -->
+      <div class="global-progress-card">
+        <div class="gp-top">
+          <span class="gp-label">题库总进度</span>
+          <span class="gp-val" id="globalProgressText">0 / 3762</span>
+        </div>
+        <div class="gp-bar">
+          <div class="gp-fill" id="globalProgressBar" style="width: 0%"></div>
+        </div>
+        <div class="gp-stats">
+          <span>正确率 <strong id="globalAccText">--%</strong></span>
+          <span>错题 <strong id="globalWrongText" class="text-danger">0</strong></span>
+          <span>收藏 <strong id="globalStarText" class="text-warn">0</strong></span>
+        </div>
+      </div>
+
+      <!-- 导航菜单 -->
+      <div class="nav-section">
+        <div class="nav-group-title">核心工作台</div>
+        <button class="nav-item active" data-view="dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span>总览与题库选卷</span>
+        </button>
+        <button class="nav-item" data-view="practice">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          <span>沉浸刷题工作台</span>
+          <span class="nav-badge" id="navCurrentCount">3762</span>
+        </button>
+        <button class="nav-item" data-view="mock">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>全真限时模考舱</span>
+        </button>
+        <button class="nav-item" data-view="timeline">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          <span>史纲时间轴实验室</span>
+          <span class="nav-tag">124专题</span>
+        </button>
+      </div>
+
+      <!-- 题库源快速切换 -->
+      <div class="nav-section">
+        <div class="nav-group-title">五大题库源快速切入</div>
+        <button class="bank-pill active" data-bank="all">
+          <span class="dot dot-all"></span>
+          <span class="bp-name">全部聚合题库 (去重精校)</span>
+          <span class="bp-cnt" id="cnt-bank-all">3762</span>
+        </button>
+        <button class="bank-pill" data-bank="xiao1000_2027">
+          <span class="dot dot-red"></span>
+          <span class="bp-name">2027 肖秀荣 1000 题</span>
+          <span class="bp-cnt" id="cnt-bank-xiao1000_2027">1172</span>
+        </button>
+        <button class="bank-pill" data-bank="past_paper">
+          <span class="dot dot-gold"></span>
+          <span class="bp-name">历年政治真题 (10-26)</span>
+          <span class="bp-cnt" id="cnt-bank-past_paper">591</span>
+        </button>
+        <button class="bank-pill" data-bank="xiao1000_2026">
+          <span class="dot dot-blue"></span>
+          <span class="bp-name">2026 肖1000 (独有补充)</span>
+          <span class="bp-cnt" id="cnt-bank-xiao1000_2026">327</span>
+        </button>
+        <button class="bank-pill" data-bank="manmanxue_1500">
+          <span class="dot dot-green"></span>
+          <span class="bp-name">2027 高分密训 1500 题</span>
+          <span class="bp-cnt" id="cnt-bank-manmanxue_1500">1571</span>
+        </button>
+        <button class="bank-pill" data-bank="current_affairs">
+          <span class="dot dot-purple"></span>
+          <span class="bp-name">2027 时政热点必刷题</span>
+          <span class="bp-cnt" id="cnt-bank-current_affairs">101</span>
+        </button>
+      </div>
+
+      <!-- 专属复习队列 -->
+      <div class="nav-section">
+        <div class="nav-group-title">靶向攻坚与数据管理</div>
+        <div class="quick-filter-row">
+          <button class="qf-btn" id="btnQuickWrong">
+            <span class="qf-num" id="qfWrongNum">0</span>
+            <span class="qf-txt">错题攻坚</span>
+          </button>
+          <button class="qf-btn" id="btnQuickStar">
+            <span class="qf-num" id="qfStarNum">0</span>
+            <span class="qf-txt">收藏夹</span>
+          </button>
+          <button class="qf-btn" id="btnQuickEssay">
+            <span class="qf-num">54</span>
+            <span class="qf-txt">材料大题</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="icon-action-btn" id="btnExportMd" title="导出错题与收藏为 Obsidian 考研笔记 (.md)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>导出 Obsidian 错题笔记</span>
+        </button>
+        <div class="footer-sub-actions">
+          <button class="sub-btn" id="btnBackupJson" title="备份做题记录 JSON">备份记录</button>
+          <label class="sub-btn" title="恢复做题记录 JSON">
+            导入记录
+            <input type="file" id="inputRestoreJson" accept=".json" style="display:none" />
+          </label>
+          <button class="sub-btn" id="btnResetProgress" title="清空所有做题记录">重置</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 主内容区域 -->
+    <div class="main-wrapper">
+      <!-- 顶部全局工具栏 -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-toggle" id="btnToggleSidebar" aria-label="切换侧边栏">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="globalSearchInput" placeholder="搜索题干、选项、考点或年份（如：唯物史观 / 剩余价值 / 2024真题 / 辛亥革命）..." />
+            <button class="clear-search" id="btnClearSearch" style="display:none">×</button>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="subject-chips" id="topSubjectChips">
+            <button class="subj-chip active" data-subj="all">全部学科</button>
+            <button class="subj-chip" data-subj="马原">马原</button>
+            <button class="subj-chip" data-subj="毛中特">毛中特</button>
+            <button class="subj-chip" data-subj="新思想">新思想</button>
+            <button class="subj-chip" data-subj="史纲">史纲</button>
+            <button class="subj-chip" data-subj="思修">思修</button>
+            <button class="subj-chip" data-subj="时政与当代">时政</button>
+          </div>
+
+          <button class="theme-toggle" id="btnThemeToggle" title="切换护眼亮色/夜间深色主题">
+            <svg id="iconSun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg id="iconMoon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- 视图 1：总览与题库选卷 (Dashboard) -->
+      <main class="view-panel active" id="view-dashboard">
+        <div class="hero-banner">
+          <div class="hero-text">
+            <div class="hero-badge">KAOYAN POLITICS MASTER SUITE · 离线零依赖高颜值题库</div>
+            <h2>考研政治全真题库与智能刷题中枢</h2>
+            <p>汇集 <strong>2010–2026 历年考研真题（全卷严格校验）</strong>、<strong>2027 肖秀荣《1000题》全章节 + 2026 独有补充母题</strong>、<strong>2027 高分密训 1500 题</strong> 与 <strong>2027 时政热点必刷题</strong>。全库已完成题干指纹去重，共计 <strong>3,762</strong> 道零重复高质量试题。</p>
+            <div class="hero-actions">
+              <button class="btn-primary" id="btnStartXiao2027">
+                <span>立即开刷 2027 肖秀荣 1000 题</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+              <button class="btn-secondary" id="btnStartPastPapers">
+                <span>历年真题实战 (2010-2026)</span>
+              </button>
+              <button class="btn-outline" id="btnStartRandom30">
+                <span>随机抽 30 题热身</span>
+              </button>
+            </div>
+          </div>
+          <div class="hero-metrics">
+            <div class="metric-box">
+              <span class="m-num">3,762</span>
+              <span class="m-lbl">去重精校总题量</span>
+            </div>
+            <div class="metric-box">
+              <span class="m-num">1,499</span>
+              <span class="m-lbl">肖1000(27全+26独有)</span>
+            </div>
+            <div class="metric-box">
+              <span class="m-num">17年</span>
+              <span class="m-lbl">2010-2026历年真题</span>
+            </div>
+            <div class="metric-box">
+              <span class="m-num">124组</span>
+              <span class="m-lbl">史纲核心考点时间轴</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 六大学科掌握度雷达卡片 -->
+        <section class="dash-section">
+          <div class="sec-header">
+            <h3>六大科目题量分布与掌握进度</h3>
+            <span class="sec-sub">点击任意科目卡片即可直接进入该学科专项刷题</span>
+          </div>
+          <div class="subject-grid" id="dashboardSubjectGrid"></div>
+        </section>
+
+        <!-- 分类章节与真题套卷选择器 -->
+        <section class="dash-section">
+          <div class="sec-header">
+            <div class="sec-header-left">
+              <h3>章节题册与历年真题套卷目录</h3>
+              <span class="sec-sub">按教辅章节或真题年份一键切入，支持单章节重刷与错题过滤</span>
+            </div>
+            <div class="catalog-tabs" id="catalogBankTabs">
+              <button class="cat-tab active" data-cbank="xiao1000_2027">2027 肖秀荣 1000 题 (按章节)</button>
+              <button class="cat-tab" data-cbank="past_paper">2010–2026 历年考研真题卷</button>
+              <button class="cat-tab" data-cbank="xiao1000_2026">2026 肖1000 (独有补充327题)</button>
+              <button class="cat-tab" data-cbank="manmanxue_1500">2027 高分密训 1500 题</button>
+              <button class="cat-tab" data-cbank="current_affairs">2027 时政热点专项</button>
+            </div>
+          </div>
+          <div class="chapter-catalog-grid" id="chapterCatalogGrid"></div>
+        </section>
+      </main>
+
+      <!-- 视图 2：沉浸刷题工作台 (Practice) -->
+      <main class="view-panel" id="view-practice">
+        <!-- 刷题控制台顶栏 -->
+        <div class="practice-toolbar">
+          <div class="pt-filters">
+            <select id="filterBankSelect" class="pt-select">
+              <option value="all">全部去重精校题库 (3762)</option>
+              <option value="xiao1000_2027">2027 肖秀荣 1000 题 (1172)</option>
+              <option value="past_paper">历年考研政治真题 2010-2026 (591)</option>
+              <option value="xiao1000_2026">2026 肖秀荣 1000 题独有补充 (327)</option>
+              <option value="manmanxue_1500">2027 高分密训 1500 题 (1571)</option>
+              <option value="current_affairs">2027 时政热点必刷 (101)</option>
+            </select>
+
+            <select id="filterChapterSelect" class="pt-select">
+              <option value="all">全部章节 / 年份套卷</option>
+            </select>
+
+            <select id="filterTypeSelect" class="pt-select">
+              <option value="all">全部题型 (单选+多选+分析题)</option>
+              <option value="single">单项选择题 (1分)</option>
+              <option value="multiple">多项选择题 (2分)</option>
+              <option value="essay">材料分析题 (10分大题)</option>
+            </select>
+
+            <select id="filterStatusSelect" class="pt-select">
+              <option value="all">全部状态</option>
+              <option value="undone">仅看未做</option>
+              <option value="wrong">仅看错题本</option>
+              <option value="starred">仅看收藏夹</option>
+              <option value="mastered">已掌握题目</option>
+            </select>
+          </div>
+
+          <div class="pt-modes">
+            <div class="seg-control" id="practiceModeSeg">
+              <button class="seg-btn active" data-pmode="do" title="做题模式：点击选项作答后揭晓解析">做题模式</button>
+              <button class="seg-btn" data-pmode="recite" title="背题模式：直接展开所有答案、精析与核心背诵">背题模式</button>
+            </div>
+            <div class="seg-control" id="layoutModeSeg">
+              <button class="seg-btn active" data-lmode="single" title="单题沉浸专注卡片（支持键盘快捷键）">单题专注</button>
+              <button class="seg-btn" data-lmode="list" title="章节瀑布流列表（适合快速扫读与整章连刷）">瀑布流列表</button>
+            </div>
+            <button class="pt-action-btn" id="btnShuffleCurrent" title="打乱当前筛选题目顺序">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+              <span>乱序</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="practice-body">
+          <!-- 左侧/主答题舞台 -->
+          <div class="question-stage" id="questionStage"></div>
+
+          <!-- 右侧：答题卡矩阵与快捷键指南 -->
+          <aside class="answer-sheet-drawer" id="answerSheetDrawer">
+            <div class="as-header">
+              <h4>题号导航矩阵</h4>
+              <span class="as-pos" id="asPositionText">1 / 1</span>
+            </div>
+            <div class="as-legend">
+              <span><i class="lg-dot lg-undone"></i>未做</span>
+              <span><i class="lg-dot lg-right"></i>答对</span>
+              <span><i class="lg-dot lg-wrong"></i>答错</span>
+              <span><i class="lg-dot lg-star"></i>收藏</span>
+            </div>
+            <div class="as-grid" id="answerSheetGrid"></div>
+            <div class="as-pagination" id="asPagination"></div>
+            <div class="shortcut-card">
+              <h5>键盘极速刷题快捷键</h5>
+              <div class="sc-grid">
+                <span><kbd>1</kbd>~<kbd>4</kbd> 或 <kbd>A</kbd>~<kbd>D</kbd></span><span>选定选项</span>
+                <span><kbd>Enter</kbd> / <kbd>Space</kbd></span><span>提交多选 / 展开解析</span>
+                <span><kbd>←</kbd> / <kbd>→</kbd></span><span>上一题 / 下一题</span>
+                <span><kbd>S</kbd> / <kbd>W</kbd></span><span>收藏题目 / 记入错题</span>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </main>
+
+      <!-- 视图 3：全真限时模考舱 (Mock Exam) -->
+      <main class="view-panel" id="view-mock">
+        <div class="mock-container" id="mockContainer">
+          <!-- 模考配置页 -->
+          <div class="mock-setup-card" id="mockSetupCard">
+            <div class="ms-header">
+              <span class="hero-badge">STANDARDIZED MOCK EXAM ENGINE</span>
+              <h2>考研政治客观题 50 分全真限时组卷模考</h2>
+              <p>严格对标全国硕士研究生招生考试《思想政治理论》试卷客观题分值结构：<strong>16 道单选题（每题 1 分，共 16 分）+ 17 道多选题（每题 2 分，共 34 分，多选/少选/错选均不得分）= 满分 50 分</strong>。</p>
+            </div>
+
+            <div class="ms-options-grid">
+              <div class="ms-opt-box">
+                <label>选择模考命题来源</label>
+                <select id="mockSourceSelect" class="pt-select full-width">
+                  <option value="past_2026">2026 年考研政治真题原卷模考（最新）</option>
+                  <option value="past_2025">2025 年考研政治真题原卷模考</option>
+                  <option value="past_2024">2024 年考研政治真题原卷模考</option>
+                  <option value="past_2023">2023 年考研政治真题原卷模考</option>
+                  <option value="past_2022">2022 年考研政治真题原卷模考</option>
+                  <option value="past_2021">2021 年考研政治真题原卷模考</option>
+                  <option value="past_2020">2020 年考研政治真题原卷模考</option>
+                  <option value="xiao1000_2027">2027 肖秀荣《1000题》按学科权重全真抽题</option>
+                  <option value="past_paper_random">2010–2026 历年考研真题混编卷</option>
+                  <option value="manmanxue_1500">2027 高分密训 1500 题拔高卷</option>
+                  <option value="wrong_book">我的错题本靶向重测卷</option>
+                </select>
+              </div>
+              <div class="ms-opt-box">
+                <label>模考限时设置</label>
+                <select id="mockDurationSelect" class="pt-select full-width">
+                  <option value="45">45 分钟（考场标准客观题推荐用时）</option>
+                  <option value="30">30 分钟（强化冲刺极限速刷）</option>
+                  <option value="60">60 分钟（基础阶段精读细思）</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="ms-blueprint">
+              <div class="bp-item"><span>马原</span><strong>单4 + 多5 = 14分</strong></div>
+              <div class="bp-item"><span>毛中特 & 新思想</span><strong>单6 + 多6 = 18分</strong></div>
+              <div class="bp-item"><span>史纲</span><strong>单3 + 多3 = 9分</strong></div>
+              <div class="bp-item"><span>思修与时政</span><strong>单3 + 多3 = 9分</strong></div>
+            </div>
+
+            <button class="btn-primary btn-large" id="btnLaunchMock">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span>开始全真模考计时（生成 33 道标准试卷）</span>
+            </button>
+          </div>
+
+          <!-- 模考进行中与成绩单容器 -->
+          <div id="mockActiveArea" style="display:none"></div>
+        </div>
+      </main>
+
+      <!-- 视图 4：史纲时间轴实验室 (History Timeline) -->
+      <main class="view-panel" id="view-timeline">
+        <div class="timeline-header-card">
+          <div>
+            <span class="hero-badge">MODERN CHINESE HISTORY LAB · 1839–2027</span>
+            <h2>中国近现代史纲要 · 124 组核心历史专题与 34 组易混周年考证</h2>
+            <p>涵盖 1839 虎门销烟至新时代重大会议时间节点，每张卡片均配有史纲历史意义、人物文献与命题点拨，内置 34 组统编教材权威时间考证对比。</p>
+          </div>
+          <div class="tl-controls">
+            <input type="text" id="timelineSearchInput" class="pt-select" placeholder="搜索历史事件或年份（如：1927 / 遵义会议 / 抗日 / 十一届三中全会）..." />
+            <div class="seg-control" id="timelineTopicSeg">
+              <button class="seg-btn active" data-tltopic="all">全部核心历史专题 (124)</button>
+              <button class="seg-btn" data-tltopic="comparisons">高频易错时间考证 (34)</button>
+            </div>
+          </div>
+        </div>
+        <div class="timeline-list" id="timelineListContainer"></div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 轻提示 Toast -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- 离线题库数据包与主逻辑 -->
+  <script src="data/question_bank_bundle.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
