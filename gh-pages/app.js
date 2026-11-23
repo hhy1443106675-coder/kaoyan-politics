@@ -9,13 +9,20 @@
   const HISTORY = window.KAOYAN_HISTORY_TIMELINE || { events: [], comparisons: [] };
   const STORAGE_KEY = "kaoyan_politics_hub_v1";
   const THEME_KEY = "kaoyan_politics_theme";
+  const SESSION_KEY = "kaoyan_politics_last_session_v1";
 
-  // 用户进度状态：{ answers: {id: {userAns, isRight, ts}}, wrong: {id: count}, starred: {id: 1}, mastered: {id: 1} }
+  // 建立 O(1) 哈希索引，大幅提升 3,762 道题的检索与判题响应速度
+  const BANK_MAP = new Map();
+  BANK.forEach(q => BANK_MAP.set(q.id, q));
+
+  // 用户进度状态：{ answers: {id: {userAns, isRight, ts}}, wrong: {id: count}, starred: {id: 1}, mastered: {id: 1}, essays: {id: text}, settings: {autoRemoveWrong: false} }
   let userStore = {
     answers: {},
     wrong: {},
     starred: {},
-    mastered: {}
+    mastered: {},
+    essays: {},
+    settings: { autoRemoveWrong: false }
   };
 
   function loadStore() {
@@ -27,12 +34,15 @@
         userStore.wrong = parsed.wrong || {};
         userStore.starred = parsed.starred || {};
         userStore.mastered = parsed.mastered || {};
+        userStore.essays = parsed.essays || {};
+        userStore.settings = parsed.settings || { autoRemoveWrong: false };
       }
     } catch (e) {
       console.warn("Load store failed:", e);
     }
-    // 尝试从局域网同步服务拉取并合并手机/电脑双端进度
-    if (location.protocol.startsWith("http")) {
+    // 仅在本地局域网同步服务 (127.0.0.1 / localhost / 10.x / 192.168.x) 下请求 /api/progress，避免 GitHub Pages 产生 404
+    const isLocalHost = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
+    if (location.protocol.startsWith("http") && isLocalHost) {
       fetch("/api/progress")
         .then(r => r.ok ? r.json() : null)
         .then(remote => {
@@ -41,6 +51,7 @@
             userStore.wrong = { ...(remote.wrong || {}), ...userStore.wrong };
             userStore.starred = { ...(remote.starred || {}), ...userStore.starred };
             userStore.mastered = { ...(remote.mastered || {}), ...userStore.mastered };
+            userStore.essays = { ...(remote.essays || {}), ...userStore.essays };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(userStore));
             updateGlobalStatsUI();
             if (state.view === "dashboard") renderDashboard();
@@ -58,7 +69,8 @@
       console.warn("Save store failed:", e);
     }
     updateGlobalStatsUI();
-    if (location.protocol.startsWith("http")) {
+    const isLocalHost = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
+    if (location.protocol.startsWith("http") && isLocalHost) {
       const payload = isReset ? { _reset: true } : userStore;
       fetch("/api/progress", {
         method: "POST",
@@ -66,6 +78,24 @@
         body: JSON.stringify(payload)
       }).catch(() => {});
     }
+  }
+
+  function saveLastSession() {
+    if (state.view !== "practice" || state.filteredQuestions.length === 0) return;
+    const curQ = state.filteredQuestions[state.currentIndex];
+    const snap = {
+      filterBank: state.filterBank,
+      filterSubject: state.filterSubject,
+      filterChapter: state.filterChapter,
+      filterType: state.filterType,
+      filterStatus: state.filterStatus,
+      currentIndex: state.currentIndex,
+      qid: curQ ? curQ.id : "",
+      label: `${curQ ? curQ.subject_short + " · " + curQ.chapter : "综合题库"} (第 ${state.currentIndex + 1}/${state.filteredQuestions.length} 题)`
+    };
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
+    } catch (e) {}
   }
 
   // 当前工作台状态
@@ -95,7 +125,8 @@
     mockTimerId: null,
     mockRemainSec: 0,
     // 史纲时间轴状态
-    tlMode: "all",
+    tlMode: "all", // all | comparisons | quiz
+    tlEra: "all",  // all | old_dem | new_dem | socialist
     tlQuery: ""
   };
 
@@ -130,6 +161,25 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  function highlightText(str, query) {
+    const safe = escapeHtml(str);
+    const q = (query || "").trim();
+    if (!q) return safe;
+    const escapedQ = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    try {
+      return safe.replace(new RegExp(`(${escapedQ})`, "gi"), `<mark class="hl-match">$1</mark>`);
+    } catch (e) {
+      return safe;
+    }
+  }
+
+  function closeMobileSidebar() {
+    const sb = document.getElementById("sidebar");
+    const bd = document.getElementById("sidebarBackdrop");
+    if (sb) sb.classList.remove("open");
+    if (bd) bd.classList.remove("open");
   }
 
   // =========================================================================
@@ -179,7 +229,8 @@
   // =========================================================================
   // 视图切换
   // =========================================================================
-  function switchView(viewName) {
+  function switchView(viewName, preserveIndex) {
+    closeMobileSidebar();
     state.view = viewName;
     document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
     const target = document.getElementById(`view-${viewName}`);
@@ -192,7 +243,7 @@
     if (viewName === "dashboard") {
       renderDashboard();
     } else if (viewName === "practice") {
-      applyFiltersAndRenderPractice();
+      applyFiltersAndRenderPractice(preserveIndex);
     } else if (viewName === "timeline") {
       renderTimeline();
     }
@@ -200,11 +251,34 @@
   }
 
   // =========================================================================
-  // Dashboard 渲染：六大学科卡片 + 章节/真题套卷目录
+  // Dashboard 渲染：六大学科卡片 + 章节/真题套卷目录 + 断点续刷
   // =========================================================================
   function renderDashboard() {
+    renderResumeBannerButton();
     renderSubjectCards();
     renderChapterCatalog();
+  }
+
+  function renderResumeBannerButton() {
+    const btn = document.getElementById("btnResumeLastSession");
+    const txt = document.getElementById("resumeSessionText");
+    if (!btn || !txt) return;
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) {
+        btn.style.display = "none";
+        return;
+      }
+      const snap = JSON.parse(raw);
+      if (snap && snap.label) {
+        btn.style.display = "inline-flex";
+        txt.textContent = `继续上次：${snap.label}`;
+      } else {
+        btn.style.display = "none";
+      }
+    } catch (e) {
+      btn.style.display = "none";
+    }
   }
 
   function renderSubjectCards() {
@@ -498,6 +572,7 @@
     const rec = userStore.answers[q.id];
     const isRevealed = state.practiceMode === "recite" || state.revealedMap[q.id] || !!rec;
     const draftSet = state.draftSelections[q.id] || new Set(rec ? (rec.userAns || "").split("") : []);
+    const hlQuery = state.searchQuery;
 
     const typeLabel = q.type === "single" ? "单选题 · 1分" : q.type === "multiple" ? "多选题 · 2分" : "材料分析题 · 10分";
     const typeClass = q.type === "single" ? "badge-single" : q.type === "multiple" ? "badge-multiple" : "badge-essay";
@@ -528,14 +603,15 @@
         return `
           <div class="${cls}" data-qid="${escapeHtml(q.id)}" data-opt="${escapeHtml(k)}" data-qtype="${q.type}">
             <span class="opt-key">${escapeHtml(k)}</span>
-            <div class="opt-text">${escapeHtml(opt.content)}</div>
+            <div class="opt-text">${highlightText(opt.content, hlQuery)}</div>
           </div>
         `;
       }).join("") + `</div>`;
     } else if (q.type === "essay") {
+      const savedEssay = (userStore.essays && userStore.essays[q.id]) || "";
       optionsHtml = `
         <div style="margin-top:10px">
-          <textarea class="essay-textarea" placeholder="在此输入你的主观题答题思路或关键词要点，随后点击下方「展开参考答案与解析」进行比对..."></textarea>
+          <textarea class="essay-textarea" data-essay-qid="${escapeHtml(q.id)}" placeholder="在此输入你的主观题答题思路或关键词要点（自动实时保存），随后点击下方「展开参考答案与解析」进行比对...">${escapeHtml(savedEssay)}</textarea>
         </div>
       `;
     }
@@ -579,7 +655,7 @@
       }
 
       const pointNoteBlock = q.point_note
-        ? `<div class="point-note-box"><strong>【核心背诵 · 命题点拨】</strong>\n${escapeHtml(q.point_note)}</div>`
+        ? `<div class="point-note-box"><strong>【核心背诵 · 命题点拨】</strong>\n${highlightText(q.point_note, hlQuery)}</div>`
         : "";
 
       analysisHtml = `
@@ -589,7 +665,7 @@
             ${q.type !== "essay" ? `<span class="ans-key-label">标准答案：<strong>${escapeHtml(q.answer)}</strong></span>` : ""}
           </div>
           <div class="analysis-section-title">权威精析与干扰项辨析</div>
-          <div class="analysis-content">${escapeHtml(q.analysis || "请结合核心考点理解记忆。")}</div>
+          <div class="analysis-content">${highlightText(q.analysis || "请结合核心考点理解记忆。", hlQuery)}</div>
           ${pointNoteBlock}
           <div class="qc-source-line">来源：${escapeHtml(q.source_note || q.bank_name)} · 章节：${escapeHtml(q.chapter)}</div>
         </div>
@@ -618,7 +694,7 @@
           </div>
         </div>
 
-        <div class="qc-stem">${escapeHtml(q.content)}</div>
+        <div class="qc-stem">${highlightText(q.content, hlQuery)}</div>
         ${optionsHtml}
 
         <div class="qc-footer-bar">
@@ -632,6 +708,8 @@
   }
 
   function bindQuestionCardEvents(stage) {
+    saveLastSession();
+
     // 选项点击
     stage.querySelectorAll(".opt-row").forEach(row => {
       row.addEventListener("click", () => {
@@ -639,6 +717,17 @@
         const opt = row.getAttribute("data-opt");
         const qtype = row.getAttribute("data-qtype");
         handleOptionPick(qid, opt, qtype);
+      });
+    });
+
+    // 材料分析题自测输入框自动持久化
+    stage.querySelectorAll(".essay-textarea").forEach(ta => {
+      ta.addEventListener("input", () => {
+        const qid = ta.getAttribute("data-essay-qid");
+        if (!userStore.essays) userStore.essays = {};
+        if (ta.value.trim()) userStore.essays[qid] = ta.value;
+        else delete userStore.essays[qid];
+        saveStore();
       });
     });
 
@@ -650,6 +739,11 @@
         if (act === "submit-multi") submitMultipleChoice(qid);
         else if (act === "reveal-essay" || act === "reveal-single") {
           state.revealedMap[qid] = true;
+          if (act === "reveal-essay") {
+            userStore.answers[qid] = { userAns: "已自测", isRight: true, ts: Date.now() };
+            saveStore();
+            renderAnswerSheet();
+          }
           renderQuestionStage();
         } else if (act === "redo-question") {
           delete userStore.answers[qid];
@@ -686,7 +780,7 @@
   }
 
   function handleOptionPick(qid, optKey, qtype) {
-    const q = BANK.find(item => item.id === qid);
+    const q = BANK_MAP.get(qid);
     if (!q) return;
 
     if (qtype === "single") {
@@ -695,6 +789,9 @@
       userStore.answers[qid] = { userAns: optKey, isRight, ts: Date.now() };
       if (!isRight) {
         userStore.wrong[qid] = (userStore.wrong[qid] || 0) + 1;
+      } else if (userStore.settings && userStore.settings.autoRemoveWrong && userStore.wrong[qid]) {
+        delete userStore.wrong[qid];
+        showToast("✓ 答对错题，已自动从错题本移除！");
       }
       state.draftSelections[qid] = new Set([optKey]);
       state.revealedMap[qid] = true;
@@ -713,7 +810,7 @@
   }
 
   function submitMultipleChoice(qid) {
-    const q = BANK.find(item => item.id === qid);
+    const q = BANK_MAP.get(qid);
     if (!q) return;
     const set = state.draftSelections[qid] || new Set();
     if (set.size === 0) {
@@ -726,6 +823,9 @@
     userStore.answers[qid] = { userAns, isRight, ts: Date.now() };
     if (!isRight) {
       userStore.wrong[qid] = (userStore.wrong[qid] || 0) + 1;
+    } else if (userStore.settings && userStore.settings.autoRemoveWrong && userStore.wrong[qid]) {
+      delete userStore.wrong[qid];
+      showToast("✓ 答对错题，已自动从错题本移除！");
     }
     state.revealedMap[qid] = true;
     saveStore();
@@ -844,8 +944,34 @@
     let multiples = pool.filter(q => q.type === "multiple");
 
     if (!src.startsWith("past_20")) {
-      singles = sampleArray(singles, 16);
-      multiples = sampleArray(multiples, 17);
+      // 严格按考研真题学科分值权重组卷：马原(4单+5多) + 毛中特&新思想(6单+6多) + 史纲(3单+3多) + 思修&时政(3单+3多)
+      const pickWeighted = (list, targetCount, quotas) => {
+        if (list.length <= targetCount) return sampleArray(list, targetCount);
+        let picked = [];
+        const usedIds = new Set();
+        quotas.forEach(qt => {
+          const subPool = list.filter(q => qt.match(q.subject_short) && !usedIds.has(q.id));
+          const chosen = sampleArray(subPool, qt.cnt);
+          chosen.forEach(q => { picked.push(q); usedIds.add(q.id); });
+        });
+        if (picked.length < targetCount) {
+          const rest = list.filter(q => !usedIds.has(q.id));
+          picked = picked.concat(sampleArray(rest, targetCount - picked.length));
+        }
+        return picked.slice(0, targetCount);
+      };
+      singles = pickWeighted(singles, 16, [
+        { match: s => s === "马原", cnt: 4 },
+        { match: s => s === "毛中特" || s === "新思想", cnt: 6 },
+        { match: s => s === "史纲", cnt: 3 },
+        { match: s => s === "思修" || s === "时政与当代", cnt: 3 }
+      ]);
+      multiples = pickWeighted(multiples, 17, [
+        { match: s => s === "马原", cnt: 5 },
+        { match: s => s === "毛中特" || s === "新思想", cnt: 6 },
+        { match: s => s === "史纲", cnt: 3 },
+        { match: s => s === "思修" || s === "时政与当代", cnt: 3 }
+      ]);
     } else {
       singles = singles.slice(0, 16);
       multiples = multiples.slice(0, 17);
@@ -890,22 +1016,44 @@
     if (state.mockSubmitted) {
       let totalScore = 0;
       let singleRight = 0, multiRight = 0;
+      const subjStats = {
+        "马原": { got: 0, max: 0 },
+        "毛中特 & 新思想": { got: 0, max: 0 },
+        "史纲": { got: 0, max: 0 },
+        "思修与时政": { got: 0, max: 0 }
+      };
       qs.forEach(q => {
+        const pts = q.type === "single" ? 1 : 2;
+        const bucket = q.subject_short === "马原" ? "马原"
+          : (q.subject_short === "毛中特" || q.subject_short === "新思想") ? "毛中特 & 新思想"
+          : q.subject_short === "史纲" ? "史纲" : "思修与时政";
+        subjStats[bucket].max += pts;
+
         const uAns = (state.mockAnswers[q.id] || "").split("").sort().join("");
         const rAns = (q.answer || "").split("").sort().join("");
         const ok = uAns === rAns;
         if (ok) {
-          if (q.type === "single") { totalScore += 1; singleRight++; }
-          else { totalScore += 2; multiRight++; }
+          totalScore += pts;
+          subjStats[bucket].got += pts;
+          if (q.type === "single") singleRight++;
+          else multiRight++;
         }
       });
 
+      const breakdownHtml = Object.keys(subjStats).map(k => `
+        <div class="msb-box">
+          <span>${escapeHtml(k)}</span>
+          <strong>${subjStats[k].got} / ${subjStats[k].max} 分</strong>
+        </div>
+      `).join("");
+
       scoreSummaryHtml = `
-        <div class="hero-banner" style="margin-bottom:20px">
-          <div class="hero-text">
+        <div class="hero-banner" style="margin-bottom:16px">
+          <div class="hero-text" style="max-width:100%">
             <div class="hero-badge">MOCK EXAM REPORT · 模考成绩诊断报告</div>
             <h2>客观题总分：${totalScore} / 50 分</h2>
             <p>单项选择题：答对 <strong>${singleRight} / 16</strong> 题（得 ${singleRight} 分） · 多项选择题：答对 <strong>${multiRight} / 17</strong> 题（得 ${multiRight * 2} 分）。所有答错题目已自动同步至你的错题本！</p>
+            <div class="mock-subj-breakdown">${breakdownHtml}</div>
           </div>
         </div>
       `;
@@ -923,6 +1071,23 @@
             ? `<button class="qc-submit-btn" id="btnSubmitMockNow">交卷并查看得分</button>`
             : `<button class="qc-nav-btn" id="btnExitMock">返回重新组卷</button>`}
         </div>
+      </div>
+    `;
+
+    const navStripHtml = `
+      <div class="mock-nav-strip">
+        <span style="font-size:0.76rem;font-weight:700;color:var(--text-muted);margin-right:4px">题号速跳：</span>
+        ${qs.map((q, idx) => {
+          const uStr = (state.mockAnswers[q.id] || "").split("").sort().join("");
+          const rStr = (q.answer || "").split("").sort().join("");
+          let cls = "mock-nav-cell";
+          if (!state.mockSubmitted) {
+            if (uStr) cls += " answered";
+          } else {
+            cls += (uStr === rStr) ? " right" : " wrong";
+          }
+          return `<button type="button" class="${cls}" data-mock-jump="${idx}">${idx + 1}</button>`;
+        }).join("")}
       </div>
     `;
 
@@ -951,6 +1116,10 @@
         `;
       }).join("");
 
+      const pointNoteBlock = (state.mockSubmitted && q.point_note)
+        ? `<div class="point-note-box"><strong>【核心背诵 · 命题点拨】</strong>\n${escapeHtml(q.point_note)}</div>`
+        : "";
+
       const analysisBlock = state.mockSubmitted ? `
         <div class="qc-analysis-box">
           <div class="ans-verdict-row">
@@ -960,16 +1129,17 @@
             <span class="ans-key-label">标准答案：<strong>${escapeHtml(q.answer)}</strong></span>
           </div>
           <div class="analysis-content">${escapeHtml(q.analysis)}</div>
+          ${pointNoteBlock}
         </div>
       ` : "";
 
       return `
-        <article class="question-card">
+        <article class="question-card" id="mock-card-${idx}">
           <div class="qc-meta-bar">
             <div class="qc-badges">
               <span class="badge-index">第 ${idx + 1} 题</span>
               <span class="badge-type ${q.type === "single" ? "badge-single" : "badge-multiple"}">${q.type === "single" ? "单选题 (1分)" : "多选题 (2分)"}</span>
-              <span class="badge-subj">${escapeHtml(q.subject_short)}</span>
+              <span class="badge-subj">${escapeHtml(q.subject_short)} · ${escapeHtml(q.chapter)}</span>
             </div>
           </div>
           <div class="qc-stem">${escapeHtml(q.content)}</div>
@@ -979,7 +1149,15 @@
       `;
     }).join("");
 
-    area.innerHTML = scoreSummaryHtml + barHtml + cardsHtml;
+    area.innerHTML = scoreSummaryHtml + barHtml + navStripHtml + cardsHtml;
+
+    area.querySelectorAll("[data-mock-jump]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = btn.getAttribute("data-mock-jump");
+        const el = document.getElementById(`mock-card-${idx}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    });
 
     area.querySelectorAll("[data-mock-qid]").forEach(row => {
       row.addEventListener("click", () => {
@@ -1031,8 +1209,22 @@
   }
 
   // =========================================================================
-  // 史纲时间轴实验室 (227 事件 + 34 组教材权威考证)
+  // 史纲时间轴实验室 (124 核心专题 + 34 组教材权威考证 + 历史分期 + 遮罩背诵 + 联动刷题)
   // =========================================================================
+  function getEventYear(ev) {
+    const lbl = ev.dates?.textbook?.label || ev.dates?.original?.label || "";
+    const m = lbl.match(/(\d{4})/);
+    return m ? parseInt(m[1], 10) : 1900;
+  }
+
+  function extractTimelineKeyword(title) {
+    const clean = (title || "").replace(/^[0-9年月日\s、，．\.]+/, "").trim();
+    const mBook = clean.match(/《([^》]{2,10})》/);
+    if (mBook) return mBook[1];
+    const parts = clean.split(/[，,。；;、\s（）()“”""]+/).filter(p => p.length >= 2);
+    return parts[0] ? parts[0].slice(0, 6) : clean.slice(0, 4);
+  }
+
   function renderTimeline() {
     const container = document.getElementById("timelineListContainer");
     if (!container) return;
@@ -1047,33 +1239,82 @@
       container.innerHTML = comps.map(c => `
         <div class="tl-card" style="border-left-color:var(--primary)">
           <div class="tl-date">教材权威考证 · ${escapeHtml(c.kind || "易错辨析")}</div>
-          <div class="tl-title">${escapeHtml(c.title)}</div>
+          <div class="tl-title">${highlightText(c.title, state.tlQuery)}</div>
           <div class="tl-desc">
-            <p><strong>统编教材标准表述：</strong><span style="color:var(--success);font-weight:700">${escapeHtml(c.textbook?.label || "见注释")}</span></p>
+            <p><strong>统编教材标准表述：</strong><span style="color:var(--success);font-weight:700">${highlightText(c.textbook?.label || "见注释", state.tlQuery)}</span></p>
             ${c.original?.label ? `<p><strong>旧表/常见误记：</strong>${escapeHtml(c.original.label)}</p>` : ""}
-            ${c.note ? `<p style="margin-top:6px;color:var(--text-primary)">${escapeHtml(c.note)}</p>` : ""}
+            ${c.note ? `<p style="margin-top:6px;color:var(--text-primary)">${highlightText(c.note, state.tlQuery)}</p>` : ""}
           </div>
         </div>
       `).join("");
       return;
     }
 
+    const isQuiz = state.tlMode === "quiz";
+
     const events = (HISTORY.events || []).filter(ev => {
+      const yr = getEventYear(ev);
+      if (state.tlEra === "old_dem" && yr >= 1919) return false;
+      if (state.tlEra === "new_dem" && (yr < 1919 || yr >= 1949)) return false;
+      if (state.tlEra === "socialist" && yr < 1949) return false;
+
       if (!q) return true;
       const dateLbl = ev.dates?.textbook?.label || ev.dates?.original?.label || "";
       return `${dateLbl} ${ev.title} ${ev.rich_desc || ""} ${ev.content} ${ev.note || ""}`.toLowerCase().includes(q);
     });
 
+    if (events.length === 0) {
+      container.innerHTML = `<div style="grid-column:1/-1;padding:36px;text-align:center;color:var(--text-muted)">该历史时期或关键词下暂无匹配条目</div>`;
+      return;
+    }
+
     container.innerHTML = events.map(ev => {
       const dateLbl = (ev.dates?.textbook?.label || ev.dates?.original?.label || "历史节点").replace(/\n/g, " / ");
+      const kw = extractTimelineKeyword(ev.title);
       return `
         <div class="tl-card">
-          <div class="tl-date">${escapeHtml(dateLbl)}</div>
-          <div class="tl-title">${escapeHtml(ev.title)}</div>
-          <div class="tl-desc" style="white-space:pre-line">${escapeHtml(ev.rich_desc || ev.note || "")}</div>
+          <div class="tl-date">${highlightText(dateLbl, state.tlQuery)}</div>
+          <div class="tl-title">${highlightText(ev.title, state.tlQuery)}</div>
+          <div class="tl-desc ${isQuiz ? "tl-quiz-mask" : ""}" style="white-space:pre-line" title="${isQuiz ? "点击揭晓考点详情" : ""}">${highlightText(ev.rich_desc || ev.note || "", state.tlQuery)}</div>
+          <div class="tl-card-foot">
+            <span style="font-size:0.72rem;color:var(--text-muted)">${isQuiz ? "点击上方模糊区揭晓答案" : "史纲核心时间坐标"}</span>
+            <button type="button" class="tl-practice-btn" data-tl-kw="${escapeHtml(kw)}">关联真题/1000题 →</button>
+          </div>
         </div>
       `;
     }).join("");
+
+    if (isQuiz) {
+      container.querySelectorAll(".tl-quiz-mask").forEach(mask => {
+        mask.addEventListener("click", () => {
+          mask.classList.toggle("revealed");
+        });
+      });
+    }
+
+    container.querySelectorAll("[data-tl-kw]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const kw = btn.getAttribute("data-tl-kw");
+        state.filterBank = "all";
+        state.filterSubject = "all";
+        state.filterChapter = "all";
+        state.filterType = "all";
+        state.filterStatus = "all";
+        state.searchQuery = kw;
+        const sInp = document.getElementById("globalSearchInput");
+        const cBtn = document.getElementById("btnClearSearch");
+        if (sInp) sInp.value = kw;
+        if (cBtn) cBtn.style.display = "block";
+        document.getElementById("filterBankSelect").value = "all";
+        document.getElementById("filterTypeSelect").value = "all";
+        document.getElementById("filterStatusSelect").value = "all";
+        syncTopSubjectChips();
+        syncSidebarBankPills();
+        populateChapterDropdown();
+        switchView("practice");
+        showToast(`已为你检索「${kw}」相关的考研政治试题！`);
+      });
+    });
   }
 
   // =========================================================================
@@ -1261,6 +1502,36 @@
     });
 
     // Dashboard Hero 按钮
+    const resumeBtn = document.getElementById("btnResumeLastSession");
+    if (resumeBtn) {
+      resumeBtn.addEventListener("click", () => {
+        try {
+          const snap = JSON.parse(localStorage.getItem(SESSION_KEY) || "{}");
+          state.filterBank = snap.filterBank || "all";
+          state.filterSubject = snap.filterSubject || "all";
+          state.filterType = snap.filterType || "all";
+          state.filterStatus = snap.filterStatus || "all";
+          document.getElementById("filterBankSelect").value = state.filterBank;
+          document.getElementById("filterTypeSelect").value = state.filterType;
+          document.getElementById("filterStatusSelect").value = state.filterStatus;
+          syncTopSubjectChips();
+          syncSidebarBankPills();
+          populateChapterDropdown();
+          if (snap.filterChapter && Array.from(document.getElementById("filterChapterSelect").options).some(o => o.value === snap.filterChapter)) {
+            state.filterChapter = snap.filterChapter;
+            document.getElementById("filterChapterSelect").value = state.filterChapter;
+          }
+          state.currentIndex = snap.currentIndex || 0;
+          state.sheetPage = Math.floor(state.currentIndex / 60);
+          state.listPage = Math.floor(state.currentIndex / 20);
+          switchView("practice", true);
+          showToast("已恢复到上次刷题位置！");
+        } catch (e) {
+          switchView("practice");
+        }
+      });
+    }
+
     document.getElementById("btnStartXiao2027").addEventListener("click", () => {
       state.filterBank = "xiao1000_2027";
       state.filterChapter = "all";
@@ -1340,6 +1611,24 @@
       });
     });
 
+    // 答对自动移错开关
+    const autoCleanBtn = document.getElementById("btnAutoCleanWrong");
+    function syncAutoCleanUI() {
+      if (!autoCleanBtn) return;
+      const on = !!(userStore.settings && userStore.settings.autoRemoveWrong);
+      autoCleanBtn.classList.toggle("active-toggle", on);
+    }
+    syncAutoCleanUI();
+    if (autoCleanBtn) {
+      autoCleanBtn.addEventListener("click", () => {
+        if (!userStore.settings) userStore.settings = {};
+        userStore.settings.autoRemoveWrong = !userStore.settings.autoRemoveWrong;
+        syncAutoCleanUI();
+        saveStore();
+        showToast(userStore.settings.autoRemoveWrong ? "已开启：答对错题时自动移出错题本" : "已关闭：答对错题时保留在错题本");
+      });
+    }
+
     // 乱序按钮
     document.getElementById("btnShuffleCurrent").addEventListener("click", () => {
       state.filteredQuestions = sampleArray(state.filteredQuestions, state.filteredQuestions.length);
@@ -1351,6 +1640,35 @@
       showToast("已打乱当前题目列表顺序！");
     });
 
+    // 重刷本组按钮
+    const resetCurBtn = document.getElementById("btnResetCurrentFilter");
+    if (resetCurBtn) {
+      resetCurBtn.addEventListener("click", () => {
+        const list = state.filteredQuestions;
+        if (!list.length) return;
+        let doneInList = 0;
+        list.forEach(q => { if (userStore.answers[q.id]) doneInList++; });
+        if (doneInList === 0) {
+          showToast("当前筛选列表还没有作答记录");
+          return;
+        }
+        if (confirm(`确定要清空当前筛选列表（共 ${list.length} 题，已做 ${doneInList} 题）的作答记录并重新开始刷题吗？（错题本与收藏夹不会丢失）`)) {
+          list.forEach(q => {
+            delete userStore.answers[q.id];
+            delete state.draftSelections[q.id];
+            delete state.revealedMap[q.id];
+          });
+          state.currentIndex = 0;
+          state.sheetPage = 0;
+          state.listPage = 0;
+          saveStore();
+          renderQuestionStage();
+          renderAnswerSheet();
+          showToast(`已重置当前列表的 ${doneInList} 条作答记录！`);
+        }
+      });
+    }
+
     // 模考启动
     document.getElementById("btnLaunchMock").addEventListener("click", launchMockExam);
 
@@ -1358,6 +1676,14 @@
     document.getElementById("timelineSearchInput").addEventListener("input", e => {
       state.tlQuery = e.target.value;
       renderTimeline();
+    });
+    document.querySelectorAll("#timelineEraSeg .seg-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#timelineEraSeg .seg-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.tlEra = btn.getAttribute("data-tlera");
+        renderTimeline();
+      });
     });
     document.querySelectorAll("#timelineTopicSeg .seg-btn").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -1413,10 +1739,17 @@
       }
     });
 
-    // 移动端侧栏开关
+    // 移动端侧栏开关与遮罩关闭
     document.getElementById("btnToggleSidebar").addEventListener("click", () => {
-      document.getElementById("sidebar").classList.toggle("open");
+      const sb = document.getElementById("sidebar");
+      const bd = document.getElementById("sidebarBackdrop");
+      const isOpen = sb.classList.toggle("open");
+      if (bd) bd.classList.toggle("open", isOpen);
     });
+    const backdrop = document.getElementById("sidebarBackdrop");
+    if (backdrop) {
+      backdrop.addEventListener("click", closeMobileSidebar);
+    }
 
     // 键盘极速刷题快捷键
     document.addEventListener("keydown", e => {

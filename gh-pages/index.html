@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>研政智库 · 考研政治全真题库与高分刷题系统</title>
-  <link rel="stylesheet" href="style.css?v=202702" />
+  <link rel="stylesheet" href="style.css?v=202703" />
 </head>
 <body>
   <!-- 专属访问密码锁屏层 (默认锁定，验证通过后永久记住，内联逻辑防缓存失效) -->
@@ -62,6 +62,9 @@
       } catch(e) {}
     })();
   </script>
+
+  <!-- 移动端侧边栏半透明遮罩 -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
   <div class="app-layout" id="appLayout" style="display:none">
     <!-- 左侧高颜值导航栏 -->
@@ -230,6 +233,10 @@
             <h2>考研政治全真题库与智能刷题中枢</h2>
             <p>汇集 <strong>2010–2026 历年考研真题（全卷严格校验）</strong>、<strong>2027 肖秀荣《1000题》全章节 + 2026 独有补充母题</strong>、<strong>2027 高分密训 1500 题</strong> 与 <strong>2027 时政热点必刷题</strong>。全库已完成题干指纹去重，共计 <strong>3,762</strong> 道零重复高质量试题。</p>
             <div class="hero-actions">
+              <button class="btn-primary" id="btnResumeLastSession" style="display:none">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span id="resumeSessionText">继续上次刷题</span>
+              </button>
               <button class="btn-primary" id="btnStartXiao2027">
                 <span>立即开刷 2027 肖秀荣 1000 题</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -333,9 +340,17 @@
               <button class="seg-btn active" data-lmode="single" title="单题沉浸专注卡片（支持键盘快捷键）">单题专注</button>
               <button class="seg-btn" data-lmode="list" title="章节瀑布流列表（适合快速扫读与整章连刷）">瀑布流列表</button>
             </div>
+            <button class="pt-action-btn" id="btnAutoCleanWrong" title="答对已收录在错题本中的题目时，自动将其移出错题本">
+              <span id="autoCleanWrongDot" class="status-dot"></span>
+              <span>答对自动移错</span>
+            </button>
             <button class="pt-action-btn" id="btnShuffleCurrent" title="打乱当前筛选题目顺序">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
               <span>乱序</span>
+            </button>
+            <button class="pt-action-btn" id="btnResetCurrentFilter" title="清空当前章节或筛选下的作答记录并重刷">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              <span>重刷本组</span>
             </button>
           </div>
         </div>
@@ -437,9 +452,16 @@
           </div>
           <div class="tl-controls">
             <input type="text" id="timelineSearchInput" class="pt-select" placeholder="搜索历史事件或年份（如：1927 / 遵义会议 / 抗日 / 十一届三中全会）..." />
+            <div class="seg-control" id="timelineEraSeg">
+              <button class="seg-btn active" data-tlera="all">全时段</button>
+              <button class="seg-btn" data-tlera="old_dem">旧民主主义 (1839-1919)</button>
+              <button class="seg-btn" data-tlera="new_dem">新民主主义 (1919-1949)</button>
+              <button class="seg-btn" data-tlera="socialist">社会主义建设与改革 (1949-今)</button>
+            </div>
             <div class="seg-control" id="timelineTopicSeg">
-              <button class="seg-btn active" data-tltopic="all">全部核心历史专题 (124)</button>
-              <button class="seg-btn" data-tltopic="comparisons">高频易错时间考证 (34)</button>
+              <button class="seg-btn active" data-tltopic="all">核心历史专题 (124)</button>
+              <button class="seg-btn" data-tltopic="comparisons">高频易错考证 (34)</button>
+              <button class="seg-btn" data-tltopic="quiz">遮罩自测背诵</button>
             </div>
           </div>
         </div>
@@ -452,7 +474,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- 离线题库数据包与主逻辑 -->
-  <script src="data/question_bank_bundle.js?v=202702"></script>
-  <script src="app.js?v=202702"></script>
+  <script src="data/question_bank_bundle.js?v=202703"></script>
+  <script src="app.js?v=202703"></script>
 </body>
 </html>

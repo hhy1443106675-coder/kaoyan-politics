@@ -1093,6 +1093,46 @@ button, select, input {
   color: var(--primary);
 }
 
+.pt-action-btn.active-toggle {
+  border-color: var(--success);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  display: inline-block;
+  transition: background 0.15s ease;
+}
+
+.pt-action-btn.active-toggle .status-dot {
+  background: var(--success);
+}
+
+mark.hl-match {
+  background: rgba(245, 158, 11, 0.28);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 19, 24, 0.48);
+  backdrop-filter: blur(2px);
+  z-index: 45;
+}
+
+.sidebar-backdrop.open {
+  display: block;
+}
+
 .practice-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 310px;
@@ -1731,14 +1771,93 @@ kbd {
   border: 1px solid var(--primary-border);
   border-radius: var(--radius-md);
   padding: 14px 20px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   position: sticky;
   top: 72px;
   z-index: 30;
   box-shadow: var(--shadow-md);
+}
+
+.mock-nav-strip {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  box-shadow: var(--shadow-sm);
+}
+
+.mock-nav-cell {
+  width: 30px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-subtle);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.mock-nav-cell:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.mock-nav-cell.answered {
+  background: var(--primary-soft);
+  border-color: var(--primary-border);
+  color: var(--primary);
+}
+
+.mock-nav-cell.right {
+  background: var(--success-soft);
+  border-color: var(--success-border);
+  color: var(--success);
+}
+
+.mock-nav-cell.wrong {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.mock-subj-breakdown {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.msb-box {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.msb-box span {
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.msb-box strong {
+  font-size: 1.05rem;
+  color: #fde68a;
 }
 
 .mock-timer {
@@ -1819,6 +1938,51 @@ kbd {
   font-size: 0.85rem;
   color: var(--text-secondary);
   line-height: 1.6;
+}
+
+.tl-quiz-mask {
+  filter: blur(5px);
+  user-select: none;
+  cursor: pointer;
+  transition: filter 0.2s ease;
+  background: var(--bg-subtle);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+.tl-quiz-mask.revealed {
+  filter: none;
+  user-select: text;
+  background: transparent;
+  padding: 0;
+}
+
+.tl-card-foot {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tl-practice-btn {
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-subtle);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tl-practice-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 /* ==========================================================================
