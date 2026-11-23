@@ -2,9 +2,13 @@
 <html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="研政智库2027" />
+  <meta name="theme-color" content="#991b1b" />
   <title>研政智库 · 考研政治全真题库与高分刷题系统</title>
-  <link rel="stylesheet" href="style.css?v=202703" />
+  <link rel="stylesheet" href="style.css?v=202704" />
 </head>
 <body>
   <!-- 专属访问密码锁屏层 (默认锁定，验证通过后永久记住，内联逻辑防缓存失效) -->
@@ -300,8 +304,15 @@
       <!-- 视图 2：沉浸刷题工作台 (Practice) -->
       <main class="view-panel" id="view-practice">
         <!-- 刷题控制台顶栏 -->
-        <div class="practice-toolbar">
-          <div class="pt-filters">
+        <div class="practice-toolbar" id="practiceToolbar">
+          <div class="pt-mobile-bar">
+            <span class="pt-mobile-summary" id="ptMobileSummary">全部题库 · 单题专注</span>
+            <button type="button" class="pt-mobile-filter-toggle" id="btnToggleMobileFilters">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              <span id="txtToggleMobileFilters">展开筛选</span>
+            </button>
+          </div>
+          <div class="pt-filters" id="ptFiltersBox">
             <select id="filterBankSelect" class="pt-select">
               <option value="all">全部去重精校题库 (3762)</option>
               <option value="xiao1000_2027">2027 肖秀荣 1000 题 (1172)</option>
@@ -359,11 +370,15 @@
           <!-- 左侧/主答题舞台 -->
           <div class="question-stage" id="questionStage"></div>
 
-          <!-- 右侧：答题卡矩阵与快捷键指南 -->
+          <!-- 右侧：答题卡矩阵与快捷键指南（手机端转化为底部上滑抽屉） -->
+          <div class="as-sheet-backdrop" id="asSheetBackdrop"></div>
           <aside class="answer-sheet-drawer" id="answerSheetDrawer">
             <div class="as-header">
               <h4>题号导航矩阵</h4>
-              <span class="as-pos" id="asPositionText">1 / 1</span>
+              <div style="display:flex;align-items:center;gap:10px">
+                <span class="as-pos" id="asPositionText">1 / 1</span>
+                <button type="button" class="as-close-mobile" id="btnCloseAnswerSheet" aria-label="关闭答题卡">×</button>
+              </div>
             </div>
             <div class="as-legend">
               <span><i class="lg-dot lg-undone"></i>未做</span>
@@ -383,6 +398,29 @@
               </div>
             </div>
           </aside>
+        </div>
+
+        <!-- 手机端专属底部拇指操作栏 (Sticky Thumb Bar) -->
+        <div class="mobile-thumb-bar" id="mobileThumbBar">
+          <button type="button" class="mtb-btn" id="mtbPrev">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="15 18 9 12 15 6"/></svg>
+            <span>上一题</span>
+          </button>
+          <button type="button" class="mtb-btn" id="mtbStar">
+            <span id="mtbStarIcon">☆</span>
+            <span id="mtbStarText">收藏</span>
+          </button>
+          <button type="button" class="mtb-btn mtb-primary" id="mtbCenterAction">
+            <span id="mtbCenterText">看解析</span>
+          </button>
+          <button type="button" class="mtb-btn" id="mtbSheet">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span id="mtbSheetPos">1/1</span>
+          </button>
+          <button type="button" class="mtb-btn" id="mtbNext">
+            <span>下一题</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
         </div>
       </main>
 
@@ -474,7 +512,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- 离线题库数据包与主逻辑 -->
-  <script src="data/question_bank_bundle.js?v=202703"></script>
-  <script src="app.js?v=202703"></script>
+  <script src="data/question_bank_bundle.js?v=202704"></script>
+  <script src="app.js?v=202704"></script>
 </body>
 </html>

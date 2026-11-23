@@ -566,6 +566,7 @@
       if (prevP) prevP.addEventListener("click", () => { state.listPage--; renderQuestionStage(); window.scrollTo({ top: 0, behavior: "smooth" }); });
       if (nextP) nextP.addEventListener("click", () => { state.listPage++; renderQuestionStage(); window.scrollTo({ top: 0, behavior: "smooth" }); });
     }
+    syncMobileThumbBar();
   }
 
   function buildQuestionCardHtml(q, idx, totalLen, isSingleMode) {
@@ -886,6 +887,7 @@
         if (state.layoutMode === "list") {
           state.listPage = Math.floor(idx / 20);
         }
+        closeMobileAnswerSheet();
         renderQuestionStage();
         renderAnswerSheet();
       });
@@ -903,6 +905,81 @@
       if (nBtn) nBtn.addEventListener("click", () => { state.sheetPage++; renderAnswerSheet(); });
     } else {
       pager.innerHTML = `<span>共 ${total} 道题</span>`;
+    }
+
+    syncMobileThumbBar();
+  }
+
+  function closeMobileAnswerSheet() {
+    const drawer = document.getElementById("answerSheetDrawer");
+    const bd = document.getElementById("asSheetBackdrop");
+    if (drawer) drawer.classList.remove("mobile-sheet-open");
+    if (bd) bd.classList.remove("open");
+  }
+
+  function syncMobileThumbBar() {
+    const bar = document.getElementById("mobileThumbBar");
+    if (!bar) return;
+
+    const list = state.filteredQuestions;
+    const total = list.length;
+
+    // 同步顶部折叠筛选栏摘要文字
+    const sumEl = document.getElementById("ptMobileSummary");
+    if (sumEl) {
+      const bankNames = {
+        all: "全库",
+        xiao1000_2027: "27肖1000",
+        past_paper: "历年真题",
+        xiao1000_2026: "26肖补充",
+        manmanxue_1500: "密训1500",
+        current_affairs: "27时政"
+      };
+      const bLbl = bankNames[state.filterBank] || "全库";
+      const sLbl = state.filterSubject === "all" ? "全部学科" : state.filterSubject;
+      sumEl.textContent = `${bLbl} · ${sLbl}（共 ${total} 题）`;
+    }
+
+    const prevBtn = document.getElementById("mtbPrev");
+    const nextBtn = document.getElementById("mtbNext");
+    const starBtn = document.getElementById("mtbStar");
+    const starIcon = document.getElementById("mtbStarIcon");
+    const starTxt = document.getElementById("mtbStarText");
+    const centerBtn = document.getElementById("mtbCenterAction");
+    const centerTxt = document.getElementById("mtbCenterText");
+    const sheetPos = document.getElementById("mtbSheetPos");
+
+    if (total === 0) {
+      if (prevBtn) prevBtn.disabled = true;
+      if (nextBtn) nextBtn.disabled = true;
+      if (sheetPos) sheetPos.textContent = "0/0";
+      return;
+    }
+
+    const q = list[state.currentIndex];
+    if (prevBtn) prevBtn.disabled = state.currentIndex <= 0;
+    if (nextBtn) nextBtn.disabled = state.currentIndex >= total - 1;
+    if (sheetPos) sheetPos.textContent = `${state.currentIndex + 1}/${total}`;
+
+    if (q && starBtn && starIcon && starTxt) {
+      const isStar = !!userStore.starred[q.id];
+      starBtn.classList.toggle("active-star", isStar);
+      starIcon.textContent = isStar ? "★" : "☆";
+      starTxt.textContent = isStar ? "已藏" : "收藏";
+    }
+
+    if (q && centerBtn && centerTxt) {
+      const rec = userStore.answers[q.id];
+      const isRevealed = state.practiceMode === "recite" || state.revealedMap[q.id] || !!rec;
+      if (!isRevealed) {
+        if (q.type === "multiple") {
+          centerTxt.textContent = "提交多选";
+        } else {
+          centerTxt.textContent = "看解析";
+        }
+      } else {
+        centerTxt.textContent = "重做本题";
+      }
     }
   }
 
@@ -1749,6 +1826,107 @@
     const backdrop = document.getElementById("sidebarBackdrop");
     if (backdrop) {
       backdrop.addEventListener("click", closeMobileSidebar);
+    }
+
+    // 手机端：刷题筛选器折叠/展开开关
+    const btnToggleFilters = document.getElementById("btnToggleMobileFilters");
+    if (btnToggleFilters) {
+      btnToggleFilters.addEventListener("click", () => {
+        const tb = document.getElementById("practiceToolbar");
+        const txt = document.getElementById("txtToggleMobileFilters");
+        if (!tb) return;
+        const exp = tb.classList.toggle("mobile-expanded");
+        if (txt) txt.textContent = exp ? "收起筛选" : "展开筛选";
+      });
+    }
+
+    // 手机端：底部固定拇指栏 & 底部上滑答题卡抽屉
+    const mtbPrev = document.getElementById("mtbPrev");
+    const mtbNext = document.getElementById("mtbNext");
+    const mtbStar = document.getElementById("mtbStar");
+    const mtbCenter = document.getElementById("mtbCenterAction");
+    const mtbSheet = document.getElementById("mtbSheet");
+    const btnCloseSheet = document.getElementById("btnCloseAnswerSheet");
+    const asBackdrop = document.getElementById("asSheetBackdrop");
+
+    if (mtbPrev) mtbPrev.addEventListener("click", () => goRelativeQuestion(-1));
+    if (mtbNext) mtbNext.addEventListener("click", () => goRelativeQuestion(1));
+    if (mtbStar) {
+      mtbStar.addEventListener("click", () => {
+        const q = state.filteredQuestions[state.currentIndex];
+        if (!q) return;
+        if (userStore.starred[q.id]) delete userStore.starred[q.id];
+        else userStore.starred[q.id] = 1;
+        saveStore();
+        renderQuestionStage();
+        renderAnswerSheet();
+      });
+    }
+    if (mtbCenter) {
+      mtbCenter.addEventListener("click", () => {
+        const q = state.filteredQuestions[state.currentIndex];
+        if (!q) return;
+        const rec = userStore.answers[q.id];
+        const isRevealed = state.practiceMode === "recite" || state.revealedMap[q.id] || !!rec;
+        if (!isRevealed) {
+          if (q.type === "multiple") {
+            submitMultipleChoice(q.id);
+          } else {
+            state.revealedMap[q.id] = true;
+            if (q.type === "essay") {
+              userStore.answers[q.id] = { userAns: "已自测", isRight: true, ts: Date.now() };
+              saveStore();
+            }
+            renderQuestionStage();
+            renderAnswerSheet();
+          }
+        } else {
+          delete userStore.answers[q.id];
+          delete state.draftSelections[q.id];
+          delete state.revealedMap[q.id];
+          saveStore();
+          renderQuestionStage();
+          renderAnswerSheet();
+        }
+      });
+    }
+    if (mtbSheet) {
+      mtbSheet.addEventListener("click", () => {
+        const drawer = document.getElementById("answerSheetDrawer");
+        const bd = document.getElementById("asSheetBackdrop");
+        if (drawer) {
+          const open = drawer.classList.toggle("mobile-sheet-open");
+          if (bd) bd.classList.toggle("open", open);
+        }
+      });
+    }
+    if (btnCloseSheet) btnCloseSheet.addEventListener("click", closeMobileAnswerSheet);
+    if (asBackdrop) asBackdrop.addEventListener("click", closeMobileAnswerSheet);
+
+    // 手机端：单题模式下左右滑屏切题手势（Swipe Left / Right）
+    const qStage = document.getElementById("questionStage");
+    if (qStage) {
+      let touchStartX = 0;
+      let touchStartY = 0;
+      qStage.addEventListener("touchstart", e => {
+        if (!e.touches || e.touches.length !== 1) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+
+      qStage.addEventListener("touchend", e => {
+        if (state.view !== "practice" || state.layoutMode !== "single") return;
+        if (!e.changedTouches || e.changedTouches.length !== 1) return;
+        const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+        if (tag === "textarea" || tag === "input" || tag === "select") return;
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        // 水平位移大于 65px 且水平位移大于垂直位移的 1.8 倍，判定为左右划屏切题
+        if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.8) {
+          if (dx < 0) goRelativeQuestion(1);
+          else goRelativeQuestion(-1);
+        }
+      }, { passive: true });
     }
 
     // 键盘极速刷题快捷键
