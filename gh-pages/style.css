@@ -318,6 +318,65 @@ button, select, input {
 .text-danger { color: var(--danger) !important; }
 .text-warn { color: var(--gold) !important; }
 
+/* Sidebar Resume Footprint Card */
+.sidebar-resume-card {
+  margin-top: 10px;
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.src-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  margin-bottom: 4px;
+}
+
+.src-tag {
+  font-weight: 800;
+  color: var(--gold);
+}
+
+.src-time {
+  color: var(--text-muted);
+}
+
+.src-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.src-pos {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.src-btn {
+  margin-top: 7px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.src-btn:hover {
+  background: var(--primary-hover);
+}
+
 /* Navigation Sections */
 .nav-section {
   margin-top: 18px;
@@ -999,6 +1058,176 @@ button, select, input {
   color: var(--text-muted);
   padding-top: 6px;
   border-top: 1px dashed var(--border-color);
+}
+
+.chapter-card.has-footprint {
+  border-color: var(--gold-border);
+}
+
+.cc-last-pos {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-border);
+  color: var(--gold);
+}
+
+/* Dashboard Last Session Resume Board */
+.dash-resume-board {
+  margin-top: 20px;
+  background: var(--bg-surface);
+  border: 1.5px solid var(--gold-border);
+  border-left: 5px solid var(--primary);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  box-shadow: var(--shadow-md);
+}
+
+.drb-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.drb-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.drb-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
+}
+
+.drb-time {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.drb-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.drb-stem {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drb-recent-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.drb-recent-lbl {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.drb-fp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-subtle);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.drb-fp-chip strong {
+  color: var(--primary);
+}
+
+.drb-fp-chip:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.drb-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.drb-pos-box {
+  text-align: right;
+}
+
+.drb-pos-lbl {
+  display: block;
+  font-size: 0.73rem;
+  color: var(--text-muted);
+}
+
+.drb-pos-num {
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.drb-go-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 18px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: linear-gradient(135deg, #b91c1c, #dc2626);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.drb-go-btn:hover {
+  transform: translateY(-1px);
+}
+
+@media (max-width: 820px) {
+  .dash-resume-board {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 15px 14px;
+    gap: 12px;
+  }
+  .drb-action {
+    justify-content: space-between;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-color);
+  }
+  .drb-pos-box {
+    text-align: left;
+  }
 }
 
 /* ==========================================================================

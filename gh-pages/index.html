@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-title" content="研政智库2027" />
   <meta name="theme-color" content="#991b1b" />
   <title>研政智库 · 考研政治全真题库与高分刷题系统</title>
-  <link rel="stylesheet" href="style.css?v=202704" />
+  <link rel="stylesheet" href="style.css?v=202706" />
 </head>
 <body>
   <!-- 专属访问密码锁屏层 (默认锁定，验证通过后永久记住，内联逻辑防缓存失效) -->
@@ -101,6 +101,17 @@
           <span>错题 <strong id="globalWrongText" class="text-danger">0</strong></span>
           <span>收藏 <strong id="globalStarText" class="text-warn">0</strong></span>
         </div>
+      </div>
+
+      <!-- 侧边栏常驻：上次刷题足迹卡片 -->
+      <div class="sidebar-resume-card" id="sidebarResumeCard" style="display:none">
+        <div class="src-head">
+          <span class="src-tag">● 上次刷到</span>
+          <span class="src-time" id="sidebarResumeTime">刚刚</span>
+        </div>
+        <div class="src-title" id="sidebarResumeTitle">2027 肖秀荣 1000 题</div>
+        <div class="src-pos" id="sidebarResumePos">第 1 / 1 题</div>
+        <button type="button" class="src-btn" id="btnSidebarResume">继续刷题 →</button>
       </div>
 
       <!-- 导航菜单 -->
@@ -272,6 +283,29 @@
             </div>
           </div>
         </div>
+
+        <!-- 上次刷题足迹与最近章节看板 (自动记忆上次刷什么、刷到第几题) -->
+        <section class="dash-resume-board" id="dashResumeBoard" style="display:none">
+          <div class="drb-main">
+            <div class="drb-meta">
+              <span class="drb-badge">上次刷题足迹 · 断点实时记忆</span>
+              <span class="drb-time" id="drbTimeText">刚刚</span>
+            </div>
+            <h3 class="drb-title" id="drbTitleText">2027 肖秀荣 1000 题 · 马原</h3>
+            <p class="drb-stem" id="drbStemPreview">正在加载上次题目预览...</p>
+            <div class="drb-recent-row" id="drbRecentRow"></div>
+          </div>
+          <div class="drb-action">
+            <div class="drb-pos-box">
+              <span class="drb-pos-lbl">上次刷到</span>
+              <strong class="drb-pos-num" id="drbPosNum">第 1 / 1 题</strong>
+            </div>
+            <button type="button" class="drb-go-btn" id="btnDashResumeGo">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span>一键接着刷</span>
+            </button>
+          </div>
+        </section>
 
         <!-- 六大学科掌握度雷达卡片 -->
         <section class="dash-section">
@@ -512,7 +546,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- 离线题库数据包与主逻辑 -->
-  <script src="data/question_bank_bundle.js?v=202704"></script>
-  <script src="app.js?v=202704"></script>
+  <script src="data/question_bank_bundle.js?v=202706"></script>
+  <script src="app.js?v=202706"></script>
 </body>
 </html>

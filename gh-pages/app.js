@@ -15,13 +15,15 @@
   const BANK_MAP = new Map();
   BANK.forEach(q => BANK_MAP.set(q.id, q));
 
-  // 用户进度状态：{ answers: {id: {userAns, isRight, ts}}, wrong: {id: count}, starred: {id: 1}, mastered: {id: 1}, essays: {id: text}, settings: {autoRemoveWrong: false} }
+  // 用户进度状态：{ answers: {id: {userAns, isRight, ts}}, wrong: {id: count}, starred: {id: 1}, mastered: {id: 1}, essays: {id: text}, chapterPos: {key: {idx, total, qid, ts}}, recentFootprints: [], settings: {autoRemoveWrong: false} }
   let userStore = {
     answers: {},
     wrong: {},
     starred: {},
     mastered: {},
     essays: {},
+    chapterPos: {},
+    recentFootprints: [],
     settings: { autoRemoveWrong: false }
   };
 
@@ -35,6 +37,8 @@
         userStore.starred = parsed.starred || {};
         userStore.mastered = parsed.mastered || {};
         userStore.essays = parsed.essays || {};
+        userStore.chapterPos = parsed.chapterPos || {};
+        userStore.recentFootprints = parsed.recentFootprints || [];
         userStore.settings = parsed.settings || { autoRemoveWrong: false };
       }
     } catch (e) {
@@ -52,6 +56,7 @@
             userStore.starred = { ...(remote.starred || {}), ...userStore.starred };
             userStore.mastered = { ...(remote.mastered || {}), ...userStore.mastered };
             userStore.essays = { ...(remote.essays || {}), ...userStore.essays };
+            userStore.chapterPos = { ...(remote.chapterPos || {}), ...userStore.chapterPos };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(userStore));
             updateGlobalStatsUI();
             if (state.view === "dashboard") renderDashboard();
@@ -80,9 +85,39 @@
     }
   }
 
+  function formatRelativeTime(ts) {
+    if (!ts) return "刚刚";
+    const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    if (diffSec < 60) return "刚刚";
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`;
+    const d = new Date(ts);
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function getChapterPosKey(bank, subj, chapter) {
+    return `${bank || "all"}|${subj || "all"}|${chapter || "all"}`;
+  }
+
   function saveLastSession() {
     if (state.view !== "practice" || state.filteredQuestions.length === 0) return;
     const curQ = state.filteredQuestions[state.currentIndex];
+    if (!curQ) return;
+    const now = Date.now();
+    const total = state.filteredQuestions.length;
+    const bankShortMap = {
+      all: "全部聚合题库",
+      xiao1000_2027: "2027 肖秀荣1000题",
+      past_paper: "历年考研政治真题",
+      xiao1000_2026: "2026 肖1000独有题",
+      manmanxue_1500: "2027 高分密训1500题",
+      current_affairs: "2027 时政热点必刷"
+    };
+    const bName = bankShortMap[state.filterBank] || curQ.bank_name || "政治题库";
+    const chDisplay = state.filterChapter.startsWith("YEAR_")
+      ? `${state.filterChapter.replace("YEAR_", "")}年真题卷`
+      : (state.filterChapter !== "all" ? state.filterChapter : curQ.chapter);
+
     const snap = {
       filterBank: state.filterBank,
       filterSubject: state.filterSubject,
@@ -90,12 +125,123 @@
       filterType: state.filterType,
       filterStatus: state.filterStatus,
       currentIndex: state.currentIndex,
-      qid: curQ ? curQ.id : "",
-      label: `${curQ ? curQ.subject_short + " · " + curQ.chapter : "综合题库"} (第 ${state.currentIndex + 1}/${state.filteredQuestions.length} 题)`
+      totalCount: total,
+      qid: curQ.id,
+      bankTitle: bName,
+      subjectShort: curQ.subject_short,
+      chapterTitle: chDisplay,
+      stemPreview: (curQ.content || "").replace(/\s+/g, " ").slice(0, 68),
+      ts: now,
+      label: `${curQ.subject_short} · ${chDisplay} (第 ${state.currentIndex + 1}/${total} 题)`
     };
+
     try {
       localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
     } catch (e) {}
+
+    // 1. 记录该章节/年份套卷的专属题号断点
+    if (!userStore.chapterPos) userStore.chapterPos = {};
+    const cKey = getChapterPosKey(state.filterBank, state.filterSubject, state.filterChapter);
+    userStore.chapterPos[cKey] = {
+      idx: state.currentIndex,
+      total: total,
+      qid: curQ.id,
+      ts: now
+    };
+    // 同时按题目实际归属的题库+章节记录一份，确保在首页目录卡片上直接可见“上次刷到第X题”
+    const qChapVal = curQ.bank === "past_paper" ? `YEAR_${curQ.year}` : curQ.chapter;
+    const qSubjVal = curQ.bank === "past_paper" ? "all" : curQ.subject_short;
+    const directKey = getChapterPosKey(curQ.bank, qSubjVal, qChapVal);
+    if (cKey === directKey) {
+      userStore.chapterPos[directKey] = {
+        idx: state.currentIndex,
+        total: total,
+        qid: curQ.id,
+        ts: now
+      };
+    }
+
+    // 2. 更新最近刷过的 4 个章节足迹队列
+    if (!Array.isArray(userStore.recentFootprints)) userStore.recentFootprints = [];
+    const fpId = `${state.filterBank}|${state.filterSubject}|${state.filterChapter}`;
+    userStore.recentFootprints = userStore.recentFootprints.filter(item => item.fpId !== fpId);
+    userStore.recentFootprints.unshift({
+      fpId,
+      filterBank: state.filterBank,
+      filterSubject: state.filterSubject,
+      filterChapter: state.filterChapter,
+      title: `${curQ.subject_short} · ${chDisplay}`,
+      posText: `第 ${state.currentIndex + 1}/${total} 题`,
+      currentIndex: state.currentIndex,
+      ts: now
+    });
+    if (userStore.recentFootprints.length > 4) {
+      userStore.recentFootprints = userStore.recentFootprints.slice(0, 4);
+    }
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(userStore));
+    } catch (e) {}
+
+    renderSidebarResumeUI(snap);
+  }
+
+  function resumeFromSnapshot(snap) {
+    if (!snap) return;
+    state.filterBank = snap.filterBank || "all";
+    state.filterSubject = snap.filterSubject || "all";
+    state.filterType = snap.filterType || "all";
+    state.filterStatus = snap.filterStatus || "all";
+    state.searchQuery = "";
+    const sInp = document.getElementById("globalSearchInput");
+    const cBtn = document.getElementById("btnClearSearch");
+    if (sInp) sInp.value = "";
+    if (cBtn) cBtn.style.display = "none";
+
+    document.getElementById("filterBankSelect").value = state.filterBank;
+    document.getElementById("filterTypeSelect").value = state.filterType;
+    document.getElementById("filterStatusSelect").value = state.filterStatus;
+    syncTopSubjectChips();
+    syncSidebarBankPills();
+    populateChapterDropdown();
+
+    const chSel = document.getElementById("filterChapterSelect");
+    if (snap.filterChapter && chSel && Array.from(chSel.options).some(o => o.value === snap.filterChapter)) {
+      state.filterChapter = snap.filterChapter;
+      chSel.value = state.filterChapter;
+    } else {
+      state.filterChapter = "all";
+      if (chSel) chSel.value = "all";
+    }
+
+    state.currentIndex = snap.currentIndex || 0;
+    state.sheetPage = Math.floor(state.currentIndex / 60);
+    state.listPage = Math.floor(state.currentIndex / 20);
+    switchView("practice", true);
+    showToast(`已接着上次位置继续：第 ${state.currentIndex + 1} 题`);
+  }
+
+  function renderSidebarResumeUI(snapOverride) {
+    const card = document.getElementById("sidebarResumeCard");
+    if (!card) return;
+    let snap = snapOverride;
+    if (!snap) {
+      try {
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (raw) snap = JSON.parse(raw);
+      } catch (e) {}
+    }
+    if (!snap || !snap.label) {
+      card.style.display = "none";
+      return;
+    }
+    card.style.display = "block";
+    const timeEl = document.getElementById("sidebarResumeTime");
+    const titleEl = document.getElementById("sidebarResumeTitle");
+    const posEl = document.getElementById("sidebarResumePos");
+    if (timeEl) timeEl.textContent = formatRelativeTime(snap.ts);
+    if (titleEl) titleEl.textContent = `${snap.subjectShort || "政治"} · ${snap.chapterTitle || snap.bankTitle || "综合"}`;
+    if (posEl) posEl.textContent = `刷到 第 ${(snap.currentIndex || 0) + 1} / ${snap.totalCount || 1} 题`;
   }
 
   // 当前工作台状态
@@ -255,6 +401,8 @@
   // =========================================================================
   function renderDashboard() {
     renderResumeBannerButton();
+    renderDashResumeBoard();
+    renderSidebarResumeUI();
     renderSubjectCards();
     renderChapterCatalog();
   }
@@ -278,6 +426,65 @@
       }
     } catch (e) {
       btn.style.display = "none";
+    }
+  }
+
+  function renderDashResumeBoard() {
+    const board = document.getElementById("dashResumeBoard");
+    if (!board) return;
+    let snap = null;
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (raw) snap = JSON.parse(raw);
+    } catch (e) {}
+
+    if (!snap || !snap.label) {
+      board.style.display = "none";
+      return;
+    }
+
+    board.style.display = "flex";
+    const timeEl = document.getElementById("drbTimeText");
+    const titleEl = document.getElementById("drbTitleText");
+    const stemEl = document.getElementById("drbStemPreview");
+    const posEl = document.getElementById("drbPosNum");
+    const recentRow = document.getElementById("drbRecentRow");
+
+    if (timeEl) timeEl.textContent = `上次活动：${formatRelativeTime(snap.ts)}`;
+    if (titleEl) {
+      const bankTitle = snap.bankTitle || "聚合题库";
+      const subj = snap.subjectShort || "政治";
+      const chap = snap.chapterTitle || "综合章节";
+      titleEl.textContent = `${bankTitle} ｜ ${subj} · ${chap}`;
+    }
+    if (stemEl) {
+      const qObj = snap.qid ? BANK_MAP.get(snap.qid) : null;
+      const preview = snap.stemPreview || (qObj ? qObj.content.replace(/\s+/g, " ").slice(0, 68) : "");
+      stemEl.textContent = preview ? `上次停留在：「${preview}...」` : "点击右侧按钮立即回到上次刷题位置";
+    }
+    if (posEl) {
+      posEl.textContent = `第 ${(snap.currentIndex || 0) + 1} / ${snap.totalCount || 1} 题`;
+    }
+
+    if (recentRow) {
+      const fps = Array.isArray(userStore.recentFootprints) ? userStore.recentFootprints : [];
+      if (fps.length > 1) {
+        recentRow.innerHTML = `<span class="drb-recent-lbl">最近刷过：</span>` + fps.map((fp, i) => `
+          <button type="button" class="drb-fp-chip" data-fp-idx="${i}">
+            <span>${escapeHtml(fp.title)}</span>
+            <strong>${escapeHtml(fp.posText)}</strong>
+          </button>
+        `).join("");
+        recentRow.querySelectorAll(".drb-fp-chip").forEach(chip => {
+          chip.addEventListener("click", () => {
+            const idx = parseInt(chip.getAttribute("data-fp-idx"), 10);
+            const targetFp = fps[idx];
+            if (targetFp) resumeFromSnapshot(targetFp);
+          });
+        });
+      } else {
+        recentRow.innerHTML = "";
+      }
     }
   }
 
@@ -374,11 +581,22 @@
         essayCnt ? `大题 ${essayCnt}` : ""
       ].filter(Boolean).join(" · ");
 
+      const posKey = cbank === "past_paper"
+        ? getChapterPosKey("past_paper", "all", `YEAR_${g.year}`)
+        : getChapterPosKey(cbank, g.subject_short, g.chapter);
+      const savedPos = userStore.chapterPos && userStore.chapterPos[posKey];
+      const posBadgeHtml = (savedPos && typeof savedPos.idx === "number")
+        ? `<span class="cc-last-pos">上次刷到第 ${Math.min(total, savedPos.idx + 1)} 题</span>`
+        : "";
+
       html += `
-        <div class="chapter-card" data-cbank="${escapeHtml(cbank)}" data-cchapter="${escapeHtml(g.chapter)}" data-csubj="${escapeHtml(g.subject_short)}" data-cyear="${g.year}">
+        <div class="chapter-card ${savedPos ? "has-footprint" : ""}" data-cbank="${escapeHtml(cbank)}" data-cchapter="${escapeHtml(g.chapter)}" data-csubj="${escapeHtml(g.subject_short)}" data-cyear="${g.year}">
           <div class="cc-head">
             <span class="cc-subj">${escapeHtml(cbank === "past_paper" ? g.year + " 真题卷" : g.subject_short)}</span>
-            <span class="cc-total">共 ${total} 题</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              ${posBadgeHtml}
+              <span class="cc-total">共 ${total} 题</span>
+            </div>
           </div>
           <div class="cc-title">${escapeHtml(cbank === "past_paper" ? g.year + "年全国硕士研究生招生考试政治真题" : g.chapter)}</div>
           <div class="cc-foot">
@@ -413,7 +631,19 @@
         document.getElementById("filterBankSelect").value = state.filterBank;
         document.getElementById("filterChapterSelect").value = state.filterChapter;
         syncSidebarBankPills();
-        switchView("practice");
+
+        // 检查该章节是否有保存的题号断点，有则自动跳到上次刷到的题号
+        const posKey = getChapterPosKey(state.filterBank, state.filterSubject, state.filterChapter);
+        const savedPos = userStore.chapterPos && userStore.chapterPos[posKey];
+        if (savedPos && typeof savedPos.idx === "number" && savedPos.idx > 0) {
+          state.currentIndex = savedPos.idx;
+          state.sheetPage = Math.floor(state.currentIndex / 60);
+          state.listPage = Math.floor(state.currentIndex / 20);
+          switchView("practice", true);
+          showToast(`已自动定位到本章上次刷到的第 ${state.currentIndex + 1} 题`);
+        } else {
+          switchView("practice");
+        }
       });
     });
   }
@@ -488,9 +718,18 @@
     document.getElementById("navCurrentCount").textContent = state.filteredQuestions.length;
 
     if (!preserveIndex) {
-      state.currentIndex = 0;
-      state.sheetPage = 0;
-      state.listPage = 0;
+      // 检查当前(题库+学科+章节)是否有历史断点，若无搜索词且处于全部状态，则自动恢复到该章节上次刷到的题号
+      const posKey = getChapterPosKey(state.filterBank, state.filterSubject, state.filterChapter);
+      const savedPos = (!qLower && state.filterStatus === "all" && state.filterType === "all" && state.filterChapter !== "all" && userStore.chapterPos)
+        ? userStore.chapterPos[posKey]
+        : null;
+      if (savedPos && typeof savedPos.idx === "number" && savedPos.idx < state.filteredQuestions.length) {
+        state.currentIndex = savedPos.idx;
+      } else {
+        state.currentIndex = 0;
+      }
+      state.sheetPage = Math.floor(state.currentIndex / 60);
+      state.listPage = Math.floor(state.currentIndex / 20);
     } else if (state.currentIndex >= state.filteredQuestions.length) {
       state.currentIndex = Math.max(0, state.filteredQuestions.length - 1);
     }
@@ -1578,36 +1817,25 @@
       applyFiltersAndRenderPractice();
     });
 
-    // Dashboard Hero 按钮
-    const resumeBtn = document.getElementById("btnResumeLastSession");
-    if (resumeBtn) {
-      resumeBtn.addEventListener("click", () => {
-        try {
-          const snap = JSON.parse(localStorage.getItem(SESSION_KEY) || "{}");
-          state.filterBank = snap.filterBank || "all";
-          state.filterSubject = snap.filterSubject || "all";
-          state.filterType = snap.filterType || "all";
-          state.filterStatus = snap.filterStatus || "all";
-          document.getElementById("filterBankSelect").value = state.filterBank;
-          document.getElementById("filterTypeSelect").value = state.filterType;
-          document.getElementById("filterStatusSelect").value = state.filterStatus;
-          syncTopSubjectChips();
-          syncSidebarBankPills();
-          populateChapterDropdown();
-          if (snap.filterChapter && Array.from(document.getElementById("filterChapterSelect").options).some(o => o.value === snap.filterChapter)) {
-            state.filterChapter = snap.filterChapter;
-            document.getElementById("filterChapterSelect").value = state.filterChapter;
-          }
-          state.currentIndex = snap.currentIndex || 0;
-          state.sheetPage = Math.floor(state.currentIndex / 60);
-          state.listPage = Math.floor(state.currentIndex / 20);
-          switchView("practice", true);
-          showToast("已恢复到上次刷题位置！");
-        } catch (e) {
+    // Dashboard Hero / 足迹看板 / 侧边栏「继续上次刷题」按钮
+    function handleResumeClick() {
+      try {
+        const snap = JSON.parse(localStorage.getItem(SESSION_KEY) || "{}");
+        if (snap && snap.label) {
+          resumeFromSnapshot(snap);
+        } else {
           switchView("practice");
         }
-      });
+      } catch (e) {
+        switchView("practice");
+      }
     }
+    const resumeBtn = document.getElementById("btnResumeLastSession");
+    if (resumeBtn) resumeBtn.addEventListener("click", handleResumeClick);
+    const dashResumeBtn = document.getElementById("btnDashResumeGo");
+    if (dashResumeBtn) dashResumeBtn.addEventListener("click", handleResumeClick);
+    const sbResumeBtn = document.getElementById("btnSidebarResume");
+    if (sbResumeBtn) sbResumeBtn.addEventListener("click", handleResumeClick);
 
     document.getElementById("btnStartXiao2027").addEventListener("click", () => {
       state.filterBank = "xiao1000_2027";
@@ -1806,7 +2034,8 @@
     });
     document.getElementById("btnResetProgress").addEventListener("click", () => {
       if (confirm("确定要清空所有做题记录、错题本和收藏夹吗？建议先点击「备份记录」。")) {
-        userStore = { answers: {}, wrong: {}, starred: {}, mastered: {} };
+        userStore = { answers: {}, wrong: {}, starred: {}, mastered: {}, essays: {}, chapterPos: {}, recentFootprints: [], settings: userStore.settings || { autoRemoveWrong: false } };
+        try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
         state.draftSelections = {};
         state.revealedMap = {};
         saveStore(true);
