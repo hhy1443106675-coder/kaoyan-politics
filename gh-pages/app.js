@@ -24,7 +24,10 @@
     essays: {},
     chapterPos: {},
     recentFootprints: [],
-    settings: { autoRemoveWrong: false }
+    settings: { autoRemoveWrong: false },
+    lastSession: null,
+    updatedAt: 0,
+    resetAt: 0
   };
 
   function loadStore() {
@@ -40,6 +43,13 @@
         userStore.chapterPos = parsed.chapterPos || {};
         userStore.recentFootprints = parsed.recentFootprints || [];
         userStore.settings = parsed.settings || { autoRemoveWrong: false };
+        userStore.lastSession = parsed.lastSession || null;
+        userStore.updatedAt = parsed.updatedAt || 0;
+        userStore.resetAt = parsed.resetAt || 0;
+      }
+      if (!userStore.lastSession) {
+        const rawSnap = localStorage.getItem(SESSION_KEY);
+        if (rawSnap) userStore.lastSession = JSON.parse(rawSnap);
       }
     } catch (e) {
       console.warn("Load store failed:", e);
@@ -68,12 +78,15 @@
   }
 
   function saveStore(isReset) {
+    userStore.updatedAt = Date.now();
+    if (isReset) userStore.resetAt = userStore.updatedAt;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(userStore));
     } catch (e) {
       console.warn("Save store failed:", e);
     }
     updateGlobalStatsUI();
+    scheduleCloudPush();
     const isLocalHost = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
     if (location.protocol.startsWith("http") && isLocalHost) {
       const payload = isReset ? { _reset: true } : userStore;
@@ -105,6 +118,14 @@
     if (!curQ) return;
     const now = Date.now();
     const total = state.filteredQuestions.length;
+    // 位置没变就不重复记录，避免无意义的云端写入
+    const prevLs = userStore.lastSession;
+    if (prevLs && prevLs.qid === curQ.id && prevLs.currentIndex === state.currentIndex &&
+        prevLs.filterBank === state.filterBank && prevLs.filterSubject === state.filterSubject &&
+        prevLs.filterChapter === state.filterChapter && prevLs.totalCount === total) {
+      renderSidebarResumeUI(prevLs);
+      return;
+    }
     const bankShortMap = {
       all: "全部聚合题库",
       xiao1000_2027: "2027 肖秀荣1000题",
@@ -179,11 +200,390 @@
       userStore.recentFootprints = userStore.recentFootprints.slice(0, 4);
     }
 
+    userStore.lastSession = snap;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(userStore));
     } catch (e) {}
 
     renderSidebarResumeUI(snap);
+    scheduleCloudPush();
+  }
+
+  // =========================================================================
+  // 多设备云同步（GitHub 私密 Gist）
+  // 作答记录按每题时间戳合并；错题/收藏/掌握/草稿/设置以最近修改的设备为准；
+  // 章节断点按章节时间戳合并；“上次刷到哪”取最新的一次。
+  // =========================================================================
+  const CLOUD_KEY = "kaoyan_cloud_sync_v1";
+  const GIST_FILE = "kaoyan_politics_progress.json";
+  const GIST_DESC = "研政智库 2027 · 做题进度云同步（私密，勿删）";
+  let cloudCfg = { token: "", gistId: "", lastSyncAt: 0 };
+  let cloudPushTimer = null;
+  let cloudBusy = false;
+  let cloudPendingPush = false;
+  let cloudState = "off";
+
+  function loadCloudCfg() {
+    try {
+      cloudCfg = Object.assign({ token: "", gistId: "", lastSyncAt: 0 }, JSON.parse(localStorage.getItem(CLOUD_KEY) || "{}"));
+    } catch (e) {}
+  }
+
+  function saveCloudCfg() {
+    try { localStorage.setItem(CLOUD_KEY, JSON.stringify(cloudCfg)); } catch (e) {}
+  }
+
+  function stableStr(v) {
+    if (v === null || v === undefined) return "null";
+    if (typeof v !== "object") return JSON.stringify(v);
+    if (Array.isArray(v)) return "[" + v.map(stableStr).join(",") + "]";
+    return "{" + Object.keys(v).filter(k => v[k] !== undefined).sort()
+      .map(k => JSON.stringify(k) + ":" + stableStr(v[k])).join(",") + "}";
+  }
+
+  function coreOf(s) {
+    s = s || {};
+    return {
+      answers: s.answers || {},
+      wrong: s.wrong || {},
+      starred: s.starred || {},
+      mastered: s.mastered || {},
+      essays: s.essays || {},
+      chapterPos: s.chapterPos || {},
+      recentFootprints: s.recentFootprints || [],
+      settings: s.settings || { autoRemoveWrong: false },
+      lastSession: s.lastSession || null,
+      resetAt: s.resetAt || 0,
+      updatedAt: s.updatedAt || 0
+    };
+  }
+
+  function persistLocalStore() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(userStore));
+      if (userStore.lastSession) localStorage.setItem(SESSION_KEY, JSON.stringify(userStore.lastSession));
+      else localStorage.removeItem(SESSION_KEY);
+    } catch (e) {}
+  }
+
+  function mergeRemoteStore(remote) {
+    const before = stableStr(coreOf(userStore));
+    const remoteCoreStr = stableStr(coreOf(remote));
+    const localTs = userStore.updatedAt || 0;
+    const remoteTs = remote.updatedAt || 0;
+    const resetAt = Math.max(userStore.resetAt || 0, remote.resetAt || 0);
+
+    const pickNewest = (srcList, outObj) => {
+      srcList.forEach(src => {
+        Object.keys(src || {}).forEach(k => {
+          const v = src[k];
+          if (!v || (v.ts || 0) < resetAt) return;
+          if (!outObj[k] || (v.ts || 0) > (outObj[k].ts || 0)) outObj[k] = v;
+        });
+      });
+      return outObj;
+    };
+
+    const mergedAns = pickNewest([remote.answers, userStore.answers], {});
+    const mergedPos = pickNewest([remote.chapterPos, userStore.chapterPos], {});
+
+    const base = remoteTs > localTs ? remote : userStore;
+    userStore.wrong = base.wrong || {};
+    userStore.starred = base.starred || {};
+    userStore.mastered = base.mastered || {};
+    userStore.essays = base.essays || {};
+    userStore.settings = base.settings || { autoRemoveWrong: false };
+
+    const rLs = remote.lastSession;
+    const lLs = userStore.lastSession;
+    const lsFromRemote = !!(rLs && (!lLs || (rLs.ts || 0) > (lLs.ts || 0)));
+    if (lsFromRemote) {
+      userStore.lastSession = rLs;
+      userStore.recentFootprints = remote.recentFootprints || [];
+    }
+    if (userStore.lastSession && (userStore.lastSession.ts || 0) < resetAt) {
+      userStore.lastSession = null;
+      userStore.recentFootprints = [];
+    }
+
+    userStore.answers = mergedAns;
+    userStore.chapterPos = mergedPos;
+    userStore.resetAt = resetAt;
+    userStore.updatedAt = Math.max(localTs, remoteTs);
+
+    const after = stableStr(coreOf(userStore));
+    persistLocalStore();
+    return { localChanged: after !== before, needPush: after !== remoteCoreStr, lsFromRemote };
+  }
+
+  async function ghApi(path, opts) {
+    opts = opts || {};
+    const headers = {
+      "Accept": "application/vnd.github+json",
+      "Authorization": "Bearer " + cloudCfg.token,
+      "X-GitHub-Api-Version": "2022-11-28"
+    };
+    if (opts.body) headers["Content-Type"] = "application/json";
+    const res = await fetch("https://api.github.com" + path, Object.assign({}, opts, { headers }));
+    if (!res.ok) {
+      const err = new Error("GitHub API " + res.status);
+      err.status = res.status;
+      throw err;
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  function buildCloudPayload() {
+    return Object.assign({}, userStore, { _savedAt: Date.now() });
+  }
+
+  function gistPatchBody() {
+    return JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(buildCloudPayload()) } } });
+  }
+
+  async function ensureGist() {
+    if (cloudCfg.gistId) return cloudCfg.gistId;
+    for (let page = 1; page <= 3; page++) {
+      const list = await ghApi(`/gists?per_page=100&page=${page}`);
+      const hit = (list || []).find(g => g.files && g.files[GIST_FILE]);
+      if (hit) {
+        cloudCfg.gistId = hit.id;
+        saveCloudCfg();
+        return hit.id;
+      }
+      if (!list || list.length < 100) break;
+    }
+    const created = await ghApi("/gists", {
+      method: "POST",
+      body: JSON.stringify({
+        description: GIST_DESC,
+        public: false,
+        files: { [GIST_FILE]: { content: JSON.stringify(buildCloudPayload()) } }
+      })
+    });
+    cloudCfg.gistId = created.id;
+    saveCloudCfg();
+    return created.id;
+  }
+
+  async function fetchRemoteStore() {
+    const g = await ghApi(`/gists/${cloudCfg.gistId}`);
+    const f = g && g.files && g.files[GIST_FILE];
+    if (!f) return null;
+    let content = f.content;
+    if (f.truncated && f.raw_url) content = await (await fetch(f.raw_url)).text();
+    try { return JSON.parse(content || "{}"); } catch (e) { return null; }
+  }
+
+  function refreshAfterRemote(lsFromRemote) {
+    updateGlobalStatsUI();
+    const ac = document.getElementById("btnAutoCleanWrong");
+    if (ac) ac.classList.toggle("active-toggle", !!(userStore.settings && userStore.settings.autoRemoveWrong));
+    if (state.view === "practice" && lsFromRemote && userStore.lastSession) {
+      resumeFromSnapshot(userStore.lastSession);
+      showToast("☁ 已同步另一台设备的进度，跳到上次刷到的位置");
+    } else if (state.view === "dashboard") {
+      renderDashboard();
+    } else if (state.view === "practice") {
+      applyFiltersAndRenderPractice(true);
+    } else {
+      renderSidebarResumeUI();
+    }
+  }
+
+  function setCloudStatus(st, err) {
+    cloudState = st;
+    document.querySelectorAll(".cs-dot").forEach(d => { d.className = "cs-dot cs-" + st; });
+    let t = "";
+    if (st === "off") t = "云同步未开启";
+    else if (st === "syncing") t = "☁ 同步中…";
+    else if (st === "pending") t = "☁ 有新改动，稍后自动同步";
+    else if (st === "ok") t = `☁ 已同步 · ${formatRelativeTime(cloudCfg.lastSyncAt)}`;
+    else if (st === "error") t = (err && err.status === 401) ? "☁ Token 无效或已过期，请重新设置" : "☁ 同步失败，30 秒后自动重试";
+    const txt = document.getElementById("csText");
+    if (txt) txt.textContent = t;
+    const ms = document.getElementById("cloudModalStatus");
+    if (ms) ms.textContent = t + (cloudCfg.gistId ? `（Gist：${cloudCfg.gistId.slice(0, 8)}…）` : "");
+  }
+
+  async function cloudSyncNow(opts) {
+    opts = opts || {};
+    if (!cloudCfg.token) return;
+    if (cloudBusy) { cloudPendingPush = true; return; }
+    cloudBusy = true;
+    setCloudStatus("syncing");
+    try {
+      await ensureGist();
+      const remote = await fetchRemoteStore();
+      let needPush = true;
+      if (remote) {
+        const r = mergeRemoteStore(remote);
+        needPush = r.needPush;
+        if (r.localChanged) refreshAfterRemote(r.lsFromRemote);
+      }
+      if (needPush) await ghApi(`/gists/${cloudCfg.gistId}`, { method: "PATCH", body: gistPatchBody() });
+      cloudCfg.lastSyncAt = Date.now();
+      saveCloudCfg();
+      setCloudStatus("ok");
+      if (opts.toast) showToast("☁ 云同步完成");
+    } catch (e) {
+      setCloudStatus("error", e);
+      if (opts.toast) showToast(e.status === 401 ? "Token 无效或已过期" : (e.status === 404 ? "找不到该 Gist，请清空 Gist ID 后重试" : "云同步失败：" + e.message));
+      if (e.status !== 401 && e.status !== 404) scheduleCloudPush(30000);
+    } finally {
+      cloudBusy = false;
+      if (cloudPendingPush) {
+        cloudPendingPush = false;
+        scheduleCloudPush(1500);
+      }
+    }
+  }
+
+  function scheduleCloudPush(delay) {
+    if (!cloudCfg.token) return;
+    if (cloudState !== "syncing") setCloudStatus("pending");
+    clearTimeout(cloudPushTimer);
+    cloudPushTimer = setTimeout(() => {
+      cloudPushTimer = null;
+      cloudSyncNow();
+    }, delay || 3000);
+  }
+
+  // 切走/锁屏前把未上传的改动立刻推上去（手机切 App 时很关键）
+  function flushCloudOnHide() {
+    if (!cloudCfg.token || !cloudPushTimer) return;
+    clearTimeout(cloudPushTimer);
+    cloudPushTimer = null;
+    if (!cloudCfg.gistId) { cloudSyncNow(); return; }
+    const body = gistPatchBody();
+    try {
+      fetch(`https://api.github.com/gists/${cloudCfg.gistId}`, {
+        method: "PATCH",
+        keepalive: body.length < 60000,
+        headers: {
+          "Accept": "application/vnd.github+json",
+          "Authorization": "Bearer " + cloudCfg.token,
+          "Content-Type": "application/json"
+        },
+        body
+      }).then(r => {
+        if (r.ok) {
+          cloudCfg.lastSyncAt = Date.now();
+          saveCloudCfg();
+          setCloudStatus("ok");
+        }
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
+  function openCloudModal() {
+    closeMobileSidebar();
+    const m = document.getElementById("cloudModal");
+    if (!m) return;
+    document.getElementById("cloudTokenInput").value = cloudCfg.token || "";
+    document.getElementById("cloudGistInput").value = cloudCfg.gistId || "";
+    setCloudStatus(cloudCfg.token ? (cloudState === "off" ? "ok" : cloudState) : "off");
+    m.style.display = "flex";
+  }
+
+  function closeCloudModal() {
+    const m = document.getElementById("cloudModal");
+    if (m) m.style.display = "none";
+  }
+
+  function initCloudSync() {
+    loadCloudCfg();
+
+    // 支持通过 #sync=... 免输配对链接自动填入 Token 与 Gist ID
+    try {
+      if (location.hash && location.hash.startsWith("#sync=")) {
+        const b64 = location.hash.slice(6);
+        const parsed = JSON.parse(atob(b64));
+        if (parsed && parsed.t) {
+          cloudCfg.token = String(parsed.t).trim();
+          if (parsed.g) cloudCfg.gistId = String(parsed.g).trim();
+          saveCloudCfg();
+          history.replaceState(null, "", location.pathname + location.search);
+          showToast("☁ 已通过配对链接自动连接云同步！");
+        }
+      }
+    } catch (e) {}
+
+    ["btnCloudTopbar", "btnCloudSettings"].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.addEventListener("click", openCloudModal);
+    });
+    const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener("click", fn); };
+    bind("btnCloudClose", closeCloudModal);
+    bind("btnCloudSave", () => {
+      const tk = document.getElementById("cloudTokenInput").value.trim();
+      const gid = document.getElementById("cloudGistInput").value.trim();
+      if (!tk) { showToast("请先粘贴 GitHub Token"); return; }
+      cloudCfg.token = tk;
+      cloudCfg.gistId = gid;
+      saveCloudCfg();
+      cloudSyncNow({ toast: true });
+    });
+    bind("btnCloudSyncNow", () => {
+      if (!cloudCfg.token) { showToast("请先填写 Token 并保存"); return; }
+      cloudSyncNow({ toast: true });
+    });
+    bind("btnCloudCopyLink", () => {
+      if (!cloudCfg.token) { showToast("请先填写并保存 Token 后再生成配对链接"); return; }
+      try {
+        const payload = btoa(JSON.stringify({ t: cloudCfg.token, g: cloudCfg.gistId || "" }));
+        const url = `${location.origin}${location.pathname}#sync=${payload}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(() => {
+            showToast("☁ 已复制配对链接！发到手机打开即可一键同步（勿分享他人）");
+          }).catch(() => fallbackCopyText(url));
+        } else {
+          fallbackCopyText(url);
+        }
+      } catch (e) {
+        showToast("生成配对链接失败");
+      }
+    });
+    function fallbackCopyText(text) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        showToast("☁ 已复制配对链接！发到手机打开即可一键同步（勿分享他人）");
+      } catch (e) {
+        showToast("复制失败，请手动在手机端填写 Token");
+      }
+      ta.remove();
+    }
+    bind("btnCloudDisconnect", () => {
+      if (!confirm("断开后本设备不再自动同步（本机记录和云端 Gist 都会保留）。确定断开？")) return;
+      cloudCfg = { token: "", gistId: "", lastSyncAt: 0 };
+      saveCloudCfg();
+      clearTimeout(cloudPushTimer);
+      cloudPushTimer = null;
+      document.getElementById("cloudTokenInput").value = "";
+      document.getElementById("cloudGistInput").value = "";
+      setCloudStatus("off");
+      showToast("已断开云同步");
+    });
+    const modal = document.getElementById("cloudModal");
+    if (modal) modal.addEventListener("click", e => { if (e.target === modal) closeCloudModal(); });
+
+    document.addEventListener("visibilitychange", () => {
+      if (!cloudCfg.token) return;
+      if (document.visibilityState === "hidden") flushCloudOnHide();
+      else if (Date.now() - (cloudCfg.lastSyncAt || 0) > 8000) cloudSyncNow();
+    });
+    window.addEventListener("pagehide", flushCloudOnHide);
+    window.addEventListener("online", () => { if (cloudCfg.token) cloudSyncNow(); });
+    setInterval(() => { if (cloudState === "ok") setCloudStatus("ok"); }, 60000);
+
+    if (cloudCfg.token) cloudSyncNow();
+    else setCloudStatus("off");
   }
 
   function resumeFromSnapshot(snap) {
@@ -2022,6 +2422,16 @@
           userStore.wrong = data.wrong || {};
           userStore.starred = data.starred || {};
           userStore.mastered = data.mastered || {};
+          userStore.essays = data.essays || {};
+          userStore.chapterPos = data.chapterPos || {};
+          userStore.recentFootprints = data.recentFootprints || [];
+          userStore.settings = data.settings || { autoRemoveWrong: false };
+          userStore.lastSession = data.lastSession || null;
+          if (userStore.lastSession) {
+            try { localStorage.setItem(SESSION_KEY, JSON.stringify(userStore.lastSession)); } catch (err) {}
+          } else {
+            try { localStorage.removeItem(SESSION_KEY); } catch (err) {}
+          }
           saveStore();
           renderDashboard();
           if (state.view === "practice") applyFiltersAndRenderPractice(true);
@@ -2034,7 +2444,7 @@
     });
     document.getElementById("btnResetProgress").addEventListener("click", () => {
       if (confirm("确定要清空所有做题记录、错题本和收藏夹吗？建议先点击「备份记录」。")) {
-        userStore = { answers: {}, wrong: {}, starred: {}, mastered: {}, essays: {}, chapterPos: {}, recentFootprints: [], settings: userStore.settings || { autoRemoveWrong: false } };
+        userStore = { answers: {}, wrong: {}, starred: {}, mastered: {}, essays: {}, chapterPos: {}, recentFootprints: [], settings: userStore.settings || { autoRemoveWrong: false }, lastSession: null, updatedAt: 0, resetAt: 0 };
         try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
         state.draftSelections = {};
         state.revealedMap = {};
@@ -2267,6 +2677,7 @@
     populateChapterDropdown();
     bindGlobalEvents();
     renderDashboard();
+    initCloudSync();
   }
 
   if (document.readyState === "loading") {

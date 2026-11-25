@@ -721,6 +721,219 @@ button, select, input {
 }
 
 /* ==========================================================================
+   Cloud Sync Status Dots, Buttons & Modal
+   ========================================================================== */
+.cs-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+  background: var(--text-muted);
+}
+
+.cs-dot.cs-off { background: #9ca3af; }
+.cs-dot.cs-syncing {
+  background: #3b82f6;
+  animation: csPulse 1s infinite ease-in-out;
+}
+.cs-dot.cs-pending { background: #f59e0b; }
+.cs-dot.cs-ok { background: var(--success); }
+.cs-dot.cs-error { background: var(--danger); }
+
+@keyframes csPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.55; }
+}
+
+.cloud-topbar-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.cloud-topbar-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.cloud-topbar-btn .cs-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--bg-surface);
+}
+
+.cloud-sidebar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-elevated);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cloud-sidebar-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.cloud-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(17, 19, 24, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.cloud-modal-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 22px 24px;
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: fadeIn 0.18s ease;
+}
+
+.cloud-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.cloud-modal-head h3 {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.cloud-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-subtle);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cloud-status-banner {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+.cloud-guide {
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+  line-height: 1.55;
+}
+
+.cloud-guide ol {
+  margin-top: 6px;
+  padding-left: 18px;
+}
+
+.cloud-guide li {
+  margin-bottom: 4px;
+}
+
+.cloud-guide a {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.cloud-guide code {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 0.76rem;
+}
+
+.cloud-field {
+  margin-bottom: 12px;
+}
+
+.cloud-field label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+
+.cloud-field input {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  font-size: 0.86rem;
+  outline: none;
+}
+
+.cloud-field input:focus {
+  border-color: var(--primary);
+}
+
+.cloud-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.cloud-danger-btn {
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ==========================================================================
    View Panels & Dashboard
    ========================================================================== */
 .view-panel {
@@ -2335,7 +2548,8 @@ button,
   .search-box input,
   .pt-select,
   .essay-textarea,
-  #timelineSearchInput {
+  #timelineSearchInput,
+  .cloud-field input {
     font-size: 16px !important;
   }
   .subject-chips {
