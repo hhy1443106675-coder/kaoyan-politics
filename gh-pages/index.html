@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-title" content="研政智库2027" />
   <meta name="theme-color" content="#991b1b" />
   <title>研政智库 · 考研政治全真题库与高分刷题系统</title>
-  <link rel="stylesheet" href="style.css?v=202707" />
+  <link rel="stylesheet" href="style.css?v=202708" />
 </head>
 <body>
   <!-- 专属访问密码锁屏层 (默认锁定，验证通过后永久记住，内联逻辑防缓存失效) -->
@@ -91,7 +91,7 @@
       <div class="global-progress-card">
         <div class="gp-top">
           <span class="gp-label">题库总进度</span>
-          <span class="gp-val" id="globalProgressText">0 / 3762</span>
+          <span class="gp-val" id="globalProgressText">0 / 4026</span>
         </div>
         <div class="gp-bar">
           <div class="gp-fill" id="globalProgressBar" style="width: 0%"></div>
@@ -124,7 +124,12 @@
         <button class="nav-item" data-view="practice">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           <span>沉浸刷题工作台</span>
-          <span class="nav-badge" id="navCurrentCount">3762</span>
+          <span class="nav-badge" id="navCurrentCount">4026</span>
+        </button>
+        <button class="nav-item" data-view="xiao8">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>
+          <span>2027 肖八按卷刷题</span>
+          <span class="nav-tag">8套</span>
         </button>
         <button class="nav-item" data-view="mock">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -139,11 +144,16 @@
 
       <!-- 题库源快速切换 -->
       <div class="nav-section">
-        <div class="nav-group-title">五大题库源快速切入</div>
+        <div class="nav-group-title">六大题库源快速切入</div>
         <button class="bank-pill active" data-bank="all">
           <span class="dot dot-all"></span>
           <span class="bp-name">全部聚合题库 (去重精校)</span>
-          <span class="bp-cnt" id="cnt-bank-all">3762</span>
+          <span class="bp-cnt" id="cnt-bank-all">4026</span>
+        </button>
+        <button class="bank-pill" data-bank="xiao8_2027">
+          <span class="dot dot-orange"></span>
+          <span class="bp-name">2027 肖秀荣《八套卷》</span>
+          <span class="bp-cnt" id="cnt-bank-xiao8_2027">264</span>
         </button>
         <button class="bank-pill" data-bank="xiao1000_2027">
           <span class="dot dot-red"></span>
@@ -254,15 +264,18 @@
           <div class="hero-text">
             <div class="hero-badge">KAOYAN POLITICS MASTER SUITE · 离线零依赖高颜值题库</div>
             <h2>考研政治全真题库与智能刷题中枢</h2>
-            <p>汇集 <strong>2010–2026 历年考研真题（全卷严格校验）</strong>、<strong>2027 肖秀荣《1000题》全章节 + 2026 独有补充母题</strong>、<strong>2027 高分密训 1500 题</strong> 与 <strong>2027 时政热点必刷题</strong>。全库已完成题干指纹去重，共计 <strong>3,762</strong> 道零重复高质量试题。</p>
+            <p>汇集 <strong>2027 肖秀荣《八套卷》（8套全264题）</strong>、<strong>2010–2026 历年考研真题（全卷严格校验）</strong>、<strong>2027 肖秀荣《1000题》+ 2026 独有补充母题</strong>、<strong>2027 高分密训 1500 题</strong> 与 <strong>2027 时政热点必刷题</strong>。共计 <strong>4,026</strong> 道高质量试题。</p>
             <div class="hero-actions">
               <button class="btn-primary" id="btnResumeLastSession" style="display:none">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                 <span id="resumeSessionText">继续上次刷题</span>
               </button>
-              <button class="btn-primary" id="btnStartXiao2027">
-                <span>立即开刷 2027 肖秀荣 1000 题</span>
+              <button class="btn-primary" id="btnStartXiao8">
+                <span>2027 肖八按卷刷题 (8套)</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+              <button class="btn-secondary" id="btnStartXiao2027">
+                <span>2027 肖秀荣 1000 题</span>
               </button>
               <button class="btn-secondary" id="btnStartPastPapers">
                 <span>历年真题实战 (2010-2026)</span>
@@ -274,8 +287,8 @@
           </div>
           <div class="hero-metrics">
             <div class="metric-box">
-              <span class="m-num">3,762</span>
-              <span class="m-lbl">去重精校总题量</span>
+              <span class="m-num">4,026</span>
+              <span class="m-lbl">全库精校总题量</span>
             </div>
             <div class="metric-box">
               <span class="m-num">1,499</span>
@@ -333,6 +346,7 @@
             </div>
             <div class="catalog-tabs" id="catalogBankTabs">
               <button class="cat-tab active" data-cbank="xiao1000_2027">2027 肖秀荣 1000 题 (按章节)</button>
+              <button class="cat-tab" data-cbank="xiao8_2027">2027 肖秀荣《八套卷》(8套)</button>
               <button class="cat-tab" data-cbank="past_paper">2010–2026 历年考研真题卷</button>
               <button class="cat-tab" data-cbank="xiao1000_2026">2026 肖1000 (独有补充327题)</button>
               <button class="cat-tab" data-cbank="manmanxue_1500">2027 高分密训 1500 题</button>
@@ -356,7 +370,8 @@
           </div>
           <div class="pt-filters" id="ptFiltersBox">
             <select id="filterBankSelect" class="pt-select">
-              <option value="all">全部去重精校题库 (3762)</option>
+              <option value="all">全部去重精校题库 (4026)</option>
+              <option value="xiao8_2027">2027 肖秀荣《八套卷》 (264)</option>
               <option value="xiao1000_2027">2027 肖秀荣 1000 题 (1172)</option>
               <option value="past_paper">历年考研政治真题 2010-2026 (591)</option>
               <option value="xiao1000_2026">2026 肖秀荣 1000 题独有补充 (327)</option>
@@ -466,6 +481,44 @@
         </div>
       </main>
 
+      <!-- 视图 2.5：2027 肖秀荣《八套卷》按卷刷题专项模块 -->
+      <main class="view-panel" id="view-xiao8">
+        <div class="xiao8-banner">
+          <div class="xiao8-banner-main">
+            <span class="hero-badge">XIAO 8 · 2027 冲刺模拟八套卷选择题专刷</span>
+            <h2>2027 肖秀荣《八套卷》· 按卷刷题与 50 分实战计分板</h2>
+            <p>完整收录第 1–8 套全部客观题（每套 16 单选 × 1分 + 17 多选 × 2分 = 50 分），附逐题官方简析与断点续刷，支持原卷限时模考与本卷错题复盘，进度自动同步云端。</p>
+            <div class="xiao8-actions-bar">
+              <button type="button" class="btn-primary" id="btnXiao8WrongOnly">
+                <span>攻坚肖八全部错题 (<strong id="x8WrongBtnCount">0</strong>)</span>
+              </button>
+              <button type="button" class="btn-secondary" id="btnXiao8ReciteAll">
+                <span>肖八全 8 套背题速览</span>
+              </button>
+            </div>
+          </div>
+          <div class="xiao8-stats-row">
+            <div class="xiao8-stat-pill">
+              <span class="x8s-num" id="x8TotalDone">0 / 264</span>
+              <span class="x8s-lbl">总刷题进度</span>
+            </div>
+            <div class="xiao8-stat-pill">
+              <span class="x8s-num" id="x8CompletedPapers">0 / 8</span>
+              <span class="x8s-lbl">已刷完套卷</span>
+            </div>
+            <div class="xiao8-stat-pill">
+              <span class="x8s-num" id="x8AvgScore">--</span>
+              <span class="x8s-lbl">已做卷均分(/50)</span>
+            </div>
+            <div class="xiao8-stat-pill">
+              <span class="x8s-num" id="x8BestScore">--</span>
+              <span class="x8s-lbl">单卷最高(/50)</span>
+            </div>
+          </div>
+        </div>
+        <div class="xiao8-grid" id="xiao8PapersGrid"></div>
+      </main>
+
       <!-- 视图 3：全真限时模考舱 (Mock Exam) -->
       <main class="view-panel" id="view-mock">
         <div class="mock-container" id="mockContainer">
@@ -481,6 +534,15 @@
               <div class="ms-opt-box">
                 <label>选择模考命题来源</label>
                 <select id="mockSourceSelect" class="pt-select full-width">
+                  <option value="xiao8_p1">2027 肖秀荣《八套卷》第 1 套（50分原卷）</option>
+                  <option value="xiao8_p2">2027 肖秀荣《八套卷》第 2 套（50分原卷）</option>
+                  <option value="xiao8_p3">2027 肖秀荣《八套卷》第 3 套（50分原卷）</option>
+                  <option value="xiao8_p4">2027 肖秀荣《八套卷》第 4 套（50分原卷）</option>
+                  <option value="xiao8_p5">2027 肖秀荣《八套卷》第 5 套（50分原卷）</option>
+                  <option value="xiao8_p6">2027 肖秀荣《八套卷》第 6 套（50分原卷）</option>
+                  <option value="xiao8_p7">2027 肖秀荣《八套卷》第 7 套（50分原卷）</option>
+                  <option value="xiao8_p8">2027 肖秀荣《八套卷》第 8 套（50分原卷）</option>
+                  <option value="xiao8_2027">2027 肖八全8套按学科权重综合抽题</option>
                   <option value="past_2026">2026 年考研政治真题原卷模考（最新）</option>
                   <option value="past_2025">2025 年考研政治真题原卷模考</option>
                   <option value="past_2024">2024 年考研政治真题原卷模考</option>
@@ -587,7 +649,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- 离线题库数据包与主逻辑 -->
-  <script src="data/question_bank_bundle.js?v=202707"></script>
-  <script src="app.js?v=202707"></script>
+  <script src="data/question_bank_bundle.js?v=202708"></script>
+  <script src="app.js?v=202708"></script>
 </body>
 </html>

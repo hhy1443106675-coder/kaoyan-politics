@@ -71,6 +71,7 @@
             updateGlobalStatsUI();
             if (state.view === "dashboard") renderDashboard();
             else if (state.view === "practice") applyFiltersAndRenderPractice(true);
+            else if (state.view === "xiao8") renderXiao8Hub();
           }
         })
         .catch(() => {});
@@ -128,6 +129,7 @@
     }
     const bankShortMap = {
       all: "全部聚合题库",
+      xiao8_2027: "2027 肖八《八套卷》",
       xiao1000_2027: "2027 肖秀荣1000题",
       past_paper: "历年考研政治真题",
       xiao1000_2026: "2026 肖1000独有题",
@@ -171,7 +173,7 @@
     };
     // 同时按题目实际归属的题库+章节记录一份，确保在首页目录卡片上直接可见“上次刷到第X题”
     const qChapVal = curQ.bank === "past_paper" ? `YEAR_${curQ.year}` : curQ.chapter;
-    const qSubjVal = curQ.bank === "past_paper" ? "all" : curQ.subject_short;
+    const qSubjVal = (curQ.bank === "past_paper" || curQ.bank === "xiao8_2027") ? "all" : curQ.subject_short;
     const directKey = getChapterPosKey(curQ.bank, qSubjVal, qChapVal);
     if (cKey === directKey) {
       userStore.chapterPos[directKey] = {
@@ -386,6 +388,8 @@
       renderDashboard();
     } else if (state.view === "practice") {
       applyFiltersAndRenderPractice(true);
+    } else if (state.view === "xiao8") {
+      renderXiao8Hub();
     } else {
       renderSidebarResumeUI();
     }
@@ -665,6 +669,7 @@
     // 当前已揭晓答案的题目 { qid: true }
     revealedMap: {},
     // 模考状态
+    mockTitle: "",
     mockQuestions: [],
     mockAnswers: {},
     mockSubmitted: false,
@@ -790,6 +795,8 @@
       renderDashboard();
     } else if (viewName === "practice") {
       applyFiltersAndRenderPractice(preserveIndex);
+    } else if (viewName === "xiao8") {
+      renderXiao8Hub();
     } else if (viewName === "timeline") {
       renderTimeline();
     }
@@ -939,16 +946,19 @@
     const cbank = state.catalogBank;
     const bankQs = BANK.filter(q => q.bank === cbank && (state.filterSubject === "all" || q.subject_short === state.filterSubject));
 
-    // Group by chapter (or year for past_paper)
+    // Group by chapter (or year for past_paper, or paper_num for xiao8_2027)
     const groups = new Map();
     bankQs.forEach(q => {
-      const key = cbank === "past_paper" ? `${q.year}年考研政治真题` : `${q.subject_short}｜${q.chapter}`;
+      const key = cbank === "past_paper"
+        ? `${q.year}年考研政治真题`
+        : (cbank === "xiao8_2027" ? `第${q.paper_num || q.chapter}套` : `${q.subject_short}｜${q.chapter}`);
       if (!groups.has(key)) {
         groups.set(key, {
           key,
           subject_short: q.subject_short,
           chapter: q.chapter,
           year: q.year,
+          paper_num: q.paper_num || 0,
           items: []
         });
       }
@@ -958,6 +968,8 @@
     let groupList = Array.from(groups.values());
     if (cbank === "past_paper") {
       groupList.sort((a, b) => b.year - a.year);
+    } else if (cbank === "xiao8_2027") {
+      groupList.sort((a, b) => a.paper_num - b.paper_num);
     }
 
     if (groupList.length === 0) {
@@ -983,22 +995,31 @@
 
       const posKey = cbank === "past_paper"
         ? getChapterPosKey("past_paper", "all", `YEAR_${g.year}`)
-        : getChapterPosKey(cbank, g.subject_short, g.chapter);
+        : (cbank === "xiao8_2027"
+          ? getChapterPosKey("xiao8_2027", "all", g.chapter)
+          : getChapterPosKey(cbank, g.subject_short, g.chapter));
       const savedPos = userStore.chapterPos && userStore.chapterPos[posKey];
       const posBadgeHtml = (savedPos && typeof savedPos.idx === "number")
         ? `<span class="cc-last-pos">上次刷到第 ${Math.min(total, savedPos.idx + 1)} 题</span>`
         : "";
 
+      const headBadge = cbank === "past_paper"
+        ? g.year + " 真题卷"
+        : (cbank === "xiao8_2027" ? `第 ${g.paper_num} 套卷` : g.subject_short);
+      const cardTitle = cbank === "past_paper"
+        ? g.year + "年全国硕士研究生招生考试政治真题"
+        : (cbank === "xiao8_2027" ? `2027 肖秀荣《八套卷》第 ${g.paper_num} 套选择题` : g.chapter);
+
       html += `
         <div class="chapter-card ${savedPos ? "has-footprint" : ""}" data-cbank="${escapeHtml(cbank)}" data-cchapter="${escapeHtml(g.chapter)}" data-csubj="${escapeHtml(g.subject_short)}" data-cyear="${g.year}">
           <div class="cc-head">
-            <span class="cc-subj">${escapeHtml(cbank === "past_paper" ? g.year + " 真题卷" : g.subject_short)}</span>
+            <span class="cc-subj">${escapeHtml(headBadge)}</span>
             <div style="display:flex;align-items:center;gap:6px">
               ${posBadgeHtml}
               <span class="cc-total">共 ${total} 题</span>
             </div>
           </div>
-          <div class="cc-title">${escapeHtml(cbank === "past_paper" ? g.year + "年全国硕士研究生招生考试政治真题" : g.chapter)}</div>
+          <div class="cc-title">${escapeHtml(cardTitle)}</div>
           <div class="cc-foot">
             <span>${typeSummary}</span>
             <span>进度 <strong>${doneCnt}/${total}</strong></span>
@@ -1022,6 +1043,11 @@
           syncTopSubjectChips();
           populateChapterDropdown();
           state.filterChapter = `YEAR_${yr}`;
+        } else if (b === "xiao8_2027") {
+          state.filterSubject = "all";
+          syncTopSubjectChips();
+          populateChapterDropdown();
+          state.filterChapter = ch;
         } else {
           state.filterSubject = subj;
           syncTopSubjectChips();
@@ -1069,6 +1095,19 @@
       Object.keys(yearCounts).sort((a, b) => b - a).forEach(yr => {
         optionsHtml += `<option value="YEAR_${yr}">${yr}年考研政治真题 (${yearCounts[yr]}题)</option>`;
       });
+    } else if (state.filterBank === "xiao8_2027") {
+      const paperMeta = new Map();
+      subset.forEach(q => {
+        const c = q.chapter || `2027 肖八第 ${q.paper_num || 1} 套`;
+        const cur = paperMeta.get(c) || { cnt: 0, pnum: q.paper_num || 99 };
+        cur.cnt += 1;
+        paperMeta.set(c, cur);
+      });
+      Array.from(paperMeta.entries())
+        .sort((a, b) => a[1].pnum - b[1].pnum)
+        .forEach(([ch, meta]) => {
+          optionsHtml += `<option value="${escapeHtml(ch)}">${escapeHtml(ch)} (${meta.cnt}题)</option>`;
+        });
     } else {
       const chMap = new Map();
       subset.forEach(q => {
@@ -1568,6 +1607,7 @@
     if (sumEl) {
       const bankNames = {
         all: "全库",
+        xiao8_2027: "27肖八",
         xiao1000_2027: "27肖1000",
         past_paper: "历年真题",
         xiao1000_2026: "26肖补充",
@@ -1623,6 +1663,204 @@
   }
 
   // =========================================================================
+  // 2027 肖秀荣《八套卷》按卷刷题模块
+  // =========================================================================
+  function openXiao8PaperPractice(paperNum, opts) {
+    opts = opts || {};
+    const ch = `2027 肖八第 ${paperNum} 套`;
+    state.filterBank = "xiao8_2027";
+    state.filterSubject = "all";
+    state.filterType = "all";
+    state.filterStatus = opts.wrongOnly ? "wrong" : "all";
+    state.searchQuery = "";
+    const sInp = document.getElementById("globalSearchInput");
+    const cBtn = document.getElementById("btnClearSearch");
+    if (sInp) sInp.value = "";
+    if (cBtn) cBtn.style.display = "none";
+
+    document.getElementById("filterBankSelect").value = "xiao8_2027";
+    document.getElementById("filterTypeSelect").value = "all";
+    document.getElementById("filterStatusSelect").value = state.filterStatus;
+    syncTopSubjectChips();
+    syncSidebarBankPills();
+    populateChapterDropdown();
+    state.filterChapter = ch;
+    const chSel = document.getElementById("filterChapterSelect");
+    if (chSel) chSel.value = ch;
+
+    if (!opts.wrongOnly) {
+      const posKey = getChapterPosKey("xiao8_2027", "all", ch);
+      const savedPos = userStore.chapterPos && userStore.chapterPos[posKey];
+      if (savedPos && typeof savedPos.idx === "number" && savedPos.idx > 0) {
+        state.currentIndex = savedPos.idx;
+        state.sheetPage = Math.floor(state.currentIndex / 60);
+        state.listPage = Math.floor(state.currentIndex / 20);
+        switchView("practice", true);
+        showToast(`已定位到第 ${paperNum} 套上次刷到的第 ${state.currentIndex + 1} 题`);
+        return;
+      }
+    }
+    switchView("practice");
+  }
+
+  function renderXiao8Hub() {
+    const grid = document.getElementById("xiao8PapersGrid");
+    if (!grid) return;
+
+    const allX8 = BANK.filter(q => q.bank === "xiao8_2027");
+    let totalDoneAll = 0;
+    let totalWrongAll = 0;
+    let completedPapers = 0;
+    const finishedScores = [];
+
+    let cardsHtml = "";
+    for (let p = 1; p <= 8; p++) {
+      const qs = allX8
+        .filter(q => q.paper_num === p)
+        .slice()
+        .sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
+      const total = qs.length || 33;
+      let doneCnt = 0;
+      let sDone = 0, sRight = 0, mDone = 0, mRight = 0, wrongCnt = 0;
+
+      qs.forEach(q => {
+        if (userStore.wrong[q.id]) wrongCnt++;
+        const rec = userStore.answers[q.id];
+        if (rec) {
+          doneCnt++;
+          if (q.type === "single") {
+            sDone++;
+            if (rec.isRight) sRight++;
+          } else {
+            mDone++;
+            if (rec.isRight) mRight++;
+          }
+        }
+      });
+
+      totalDoneAll += doneCnt;
+      totalWrongAll += wrongCnt;
+      const score = sRight + mRight * 2;
+      const isDone = qs.length > 0 && doneCnt === qs.length;
+      if (isDone) {
+        completedPapers++;
+        finishedScores.push(score);
+      } else if (doneCnt > 0) {
+        finishedScores.push(score);
+      }
+
+      const pct = qs.length > 0 ? Math.round((doneCnt / qs.length) * 100) : 0;
+      const ch = `2027 肖八第 ${p} 套`;
+      const posKey = getChapterPosKey("xiao8_2027", "all", ch);
+      const savedPos = userStore.chapterPos && userStore.chapterPos[posKey];
+      const hasPos = savedPos && typeof savedPos.idx === "number" && savedPos.idx > 0 && savedPos.idx < qs.length;
+      const mainBtnTxt = isDone
+        ? "查看本卷解析"
+        : (hasPos ? `接着第 ${savedPos.idx + 1} 题刷` : (doneCnt > 0 ? "继续刷本卷" : "开始刷第 " + p + " 套"));
+
+      const posBadge = hasPos
+        ? `<span class="x8c-pos-badge">上次停在第 ${savedPos.idx + 1} 题</span>`
+        : "";
+
+      cardsHtml += `
+        <article class="xiao8-paper-card ${isDone ? "is-done" : ""}">
+          <div class="x8c-head">
+            <div class="x8c-title-wrap">
+              <div class="x8c-tag-row">
+                <span class="x8c-badge">2027 肖八 · 第 ${p} 套</span>
+                ${posBadge}
+              </div>
+              <div class="x8c-title">肖秀荣冲刺八套卷（${["一","二","三","四","五","六","七","八"][p - 1]}）客观题</div>
+            </div>
+            <div class="x8c-score ${isDone ? "has-full" : ""}">
+              <strong>${doneCnt > 0 ? score : "--"}</strong>
+              <span>实时得分 / 50</span>
+            </div>
+          </div>
+
+          <div class="x8c-prog">
+            <div class="x8c-prog-top">
+              <span>已刷 ${doneCnt} / ${total} 题 (${pct}%)</span>
+              <span>${isDone ? "✓ 已完成" : (doneCnt > 0 ? "刷题中" : "未开始")}</span>
+            </div>
+            <div class="x8c-prog-bar"><div class="x8c-prog-fill" style="width:${pct}%"></div></div>
+          </div>
+
+          <div class="x8c-breakdown">
+            <span>单选 <strong>${sRight}</strong>/${sDone || 16} (${sRight}分)</span>
+            <span>多选 <strong>${mRight}</strong>/${mDone || 17} (${mRight * 2}分)</span>
+            <span>错题 <strong class="${wrongCnt > 0 ? "text-danger" : ""}">${wrongCnt}</strong> 题</span>
+          </div>
+
+          <div class="x8c-actions">
+            <button type="button" class="x8c-btn-main" data-x8-practice="${p}">${mainBtnTxt}</button>
+            <button type="button" class="x8c-btn-sub" data-x8-mock="${p}">50分模考</button>
+            <button type="button" class="x8c-btn-sub ${wrongCnt > 0 ? "is-wrong" : ""}" data-x8-wrong="${p}" ${wrongCnt === 0 ? "disabled" : ""}>错题(${wrongCnt})</button>
+            <button type="button" class="x8c-btn-sub" data-x8-reset="${p}" ${doneCnt === 0 ? "disabled" : ""}>重刷</button>
+          </div>
+        </article>
+      `;
+    }
+
+    const totalEl = document.getElementById("x8TotalDone");
+    const compEl = document.getElementById("x8CompletedPapers");
+    const avgEl = document.getElementById("x8AvgScore");
+    const bestEl = document.getElementById("x8BestScore");
+    const wrongBtnEl = document.getElementById("x8WrongBtnCount");
+
+    if (totalEl) totalEl.textContent = `${totalDoneAll} / ${allX8.length || 264}`;
+    if (compEl) compEl.textContent = `${completedPapers} / 8`;
+    if (avgEl) avgEl.textContent = finishedScores.length ? (finishedScores.reduce((a, b) => a + b, 0) / finishedScores.length).toFixed(1) : "--";
+    if (bestEl) bestEl.textContent = finishedScores.length ? Math.max(...finishedScores) : "--";
+    if (wrongBtnEl) wrongBtnEl.textContent = totalWrongAll;
+
+    grid.innerHTML = cardsHtml;
+
+    grid.querySelectorAll("[data-x8-practice]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const pnum = parseInt(btn.getAttribute("data-x8-practice"), 10);
+        openXiao8PaperPractice(pnum);
+      });
+    });
+
+    grid.querySelectorAll("[data-x8-wrong]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const pnum = parseInt(btn.getAttribute("data-x8-wrong"), 10);
+        openXiao8PaperPractice(pnum, { wrongOnly: true });
+      });
+    });
+
+    grid.querySelectorAll("[data-x8-mock]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const pnum = parseInt(btn.getAttribute("data-x8-mock"), 10);
+        const sel = document.getElementById("mockSourceSelect");
+        if (sel) sel.value = `xiao8_p${pnum}`;
+        switchView("mock");
+        launchMockExam();
+      });
+    });
+
+    grid.querySelectorAll("[data-x8-reset]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const pnum = parseInt(btn.getAttribute("data-x8-reset"), 10);
+        const qs = BANK.filter(q => q.bank === "xiao8_2027" && q.paper_num === pnum);
+        if (!qs.length) return;
+        if (!confirm(`确定要清空《2027 肖八》第 ${pnum} 套（共 ${qs.length} 题）的作答记录并重新开始刷题吗？（错题本与收藏夹会保留）`)) return;
+        qs.forEach(q => {
+          delete userStore.answers[q.id];
+          delete state.draftSelections[q.id];
+          delete state.revealedMap[q.id];
+        });
+        const chKey = getChapterPosKey("xiao8_2027", "all", `2027 肖八第 ${pnum} 套`);
+        if (userStore.chapterPos) delete userStore.chapterPos[chKey];
+        saveStore();
+        renderXiao8Hub();
+        showToast(`已重置肖八第 ${pnum} 套的作答记录`);
+      });
+    });
+  }
+
+  // =========================================================================
   // 全真限时模考舱 (16 单选 + 17 多选 = 50 分标准卷)
   // =========================================================================
   function sampleArray(arr, count) {
@@ -1641,9 +1879,18 @@
     const mins = parseInt(document.getElementById("mockDurationSelect").value, 10) || 45;
 
     let pool = [];
-    if (src.startsWith("past_20")) {
+    let mockTitle = "考研政治 50 分标准客观题模考卷";
+    const isFixedPaper = src.startsWith("past_20") || src.startsWith("xiao8_p");
+    if (src.startsWith("xiao8_p")) {
+      const pnum = parseInt(src.replace("xiao8_p", ""), 10);
+      pool = BANK.filter(q => q.bank === "xiao8_2027" && q.paper_num === pnum && q.type !== "essay")
+        .slice()
+        .sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
+      mockTitle = `2027 肖秀荣《八套卷》第 ${pnum} 套（50分标准客观题）`;
+    } else if (src.startsWith("past_20")) {
       const yr = parseInt(src.replace("past_", ""), 10);
       pool = BANK.filter(q => q.bank === "past_paper" && q.year === yr && q.type !== "essay");
+      mockTitle = `${yr} 年考研政治真题（50分标准客观题）`;
     } else if (src === "past_paper_random") {
       pool = BANK.filter(q => q.bank === "past_paper" && q.type !== "essay");
     } else if (src === "wrong_book") {
@@ -1659,7 +1906,7 @@
     let singles = pool.filter(q => q.type === "single");
     let multiples = pool.filter(q => q.type === "multiple");
 
-    if (!src.startsWith("past_20")) {
+    if (!isFixedPaper) {
       // 严格按考研真题学科分值权重组卷：马原(4单+5多) + 毛中特&新思想(6单+6多) + 史纲(3单+3多) + 思修&时政(3单+3多)
       const pickWeighted = (list, targetCount, quotas) => {
         if (list.length <= targetCount) return sampleArray(list, targetCount);
@@ -1693,6 +1940,7 @@
       multiples = multiples.slice(0, 17);
     }
 
+    state.mockTitle = mockTitle;
     state.mockQuestions = singles.concat(multiples);
     state.mockAnswers = {};
     state.mockSubmitted = false;
@@ -1778,7 +2026,7 @@
     const barHtml = `
       <div class="mock-running-bar">
         <div>
-          <strong>考研政治 50 分标准客观题模考卷</strong>
+          <strong>${escapeHtml(state.mockTitle || "考研政治 50 分标准客观题模考卷")}</strong>
           <span style="margin-left:12px;font-size:0.84rem;color:var(--text-muted)">已作答 ${Object.keys(state.mockAnswers).filter(k => state.mockAnswers[k]).length} / ${qs.length} 题</span>
         </div>
         <div style="display:flex;align-items:center;gap:14px">
@@ -2237,6 +2485,51 @@
     const sbResumeBtn = document.getElementById("btnSidebarResume");
     if (sbResumeBtn) sbResumeBtn.addEventListener("click", handleResumeClick);
 
+    const btnXiao8Hero = document.getElementById("btnStartXiao8");
+    if (btnXiao8Hero) {
+      btnXiao8Hero.addEventListener("click", () => switchView("xiao8"));
+    }
+
+    const btnX8Wrong = document.getElementById("btnXiao8WrongOnly");
+    if (btnX8Wrong) {
+      btnX8Wrong.addEventListener("click", () => {
+        state.filterBank = "xiao8_2027";
+        state.filterSubject = "all";
+        state.filterChapter = "all";
+        state.filterType = "all";
+        state.filterStatus = "wrong";
+        document.getElementById("filterBankSelect").value = "xiao8_2027";
+        document.getElementById("filterTypeSelect").value = "all";
+        document.getElementById("filterStatusSelect").value = "wrong";
+        syncTopSubjectChips();
+        syncSidebarBankPills();
+        populateChapterDropdown();
+        switchView("practice");
+      });
+    }
+
+    const btnX8Recite = document.getElementById("btnXiao8ReciteAll");
+    if (btnX8Recite) {
+      btnX8Recite.addEventListener("click", () => {
+        state.filterBank = "xiao8_2027";
+        state.filterSubject = "all";
+        state.filterChapter = "all";
+        state.filterType = "all";
+        state.filterStatus = "all";
+        state.practiceMode = "recite";
+        document.querySelectorAll("#practiceModeSeg .seg-btn").forEach(b => {
+          b.classList.toggle("active", b.getAttribute("data-pmode") === "recite");
+        });
+        document.getElementById("filterBankSelect").value = "xiao8_2027";
+        document.getElementById("filterTypeSelect").value = "all";
+        document.getElementById("filterStatusSelect").value = "all";
+        syncTopSubjectChips();
+        syncSidebarBankPills();
+        populateChapterDropdown();
+        switchView("practice");
+      });
+    }
+
     document.getElementById("btnStartXiao2027").addEventListener("click", () => {
       state.filterBank = "xiao1000_2027";
       state.filterChapter = "all";
@@ -2435,6 +2728,7 @@
           saveStore();
           renderDashboard();
           if (state.view === "practice") applyFiltersAndRenderPractice(true);
+          else if (state.view === "xiao8") renderXiao8Hub();
           showToast("做题记录恢复成功！");
         } catch (err) {
           showToast("JSON 格式无效，恢复失败");
@@ -2451,6 +2745,7 @@
         saveStore(true);
         renderDashboard();
         if (state.view === "practice") applyFiltersAndRenderPractice(true);
+        else if (state.view === "xiao8") renderXiao8Hub();
         showToast("已重置全部做题进度");
       }
     });
